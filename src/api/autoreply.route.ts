@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { getAutoReply, setAutoReply, type AutoReply } from '../core/registry.js';
 import { fail } from './respond.js';
 import { services } from '../core/services.js';
+import { parseClientEvent } from '../contract/ws-events.js';
 
 export const autoReplyRouter = Router();
 
@@ -15,9 +16,14 @@ autoReplyRouter.get('/customers/:number/auto-reply', (req: Request, res: Respons
 // 14. PUT a tile's auto-reply config (FR-10)
 autoReplyRouter.put('/customers/:number/auto-reply', (req: Request, res: Response) => {
   const { mode, delay_ms, rules } = req.body ?? {};
-  if (!['manual', 'echo', 'keyword'].includes(mode))
-    return fail(res, 400, "mode must be 'manual', 'echo' or 'keyword'");
-  const ar: AutoReply = { mode, delay_ms: Number(delay_ms ?? 0), rules: Array.isArray(rules) ? rules : [] };
+  // Same checks as the tile's gear over /ws (tile.autoreply, contract parser), so both paths
+  // accept exactly the same input. Omitted delay_ms / rules default to 0 / [].
+  const parsed = parseClientEvent(
+    JSON.stringify({ type: 'tile.autoreply', number: String(req.params.number), mode, delay_ms: delay_ms ?? 0, rules: rules ?? [] }),
+  );
+  if (!parsed.ok) return fail(res, 400, parsed.error.message);
+  if (parsed.event.type !== 'tile.autoreply') return fail(res, 400, 'invalid auto-reply');
+  const ar: AutoReply = { mode: parsed.event.mode, delay_ms: parsed.event.delay_ms, rules: parsed.event.rules };
   const number = String(req.params.number);
   try {
     const saved = setAutoReply(number, ar);

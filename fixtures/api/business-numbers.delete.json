@@ -1,7 +1,7 @@
 {
   "request": {
     "method": "DELETE",
-    "path": "/api/business-numbers/MOCK-PN-2"
+    "path": "/api/business-numbers/MOCK-PN-1"
   },
   "status": 204,
   "body": null

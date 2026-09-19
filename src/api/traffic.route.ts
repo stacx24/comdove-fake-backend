@@ -13,16 +13,18 @@ export const trafficRouter = Router();
 trafficRouter.post('/presence', (req: Request, res: Response) => {
   const { number, online } = req.body ?? {};
   if (!number) return fail(res, 400, 'number is required');
+  // A real boolean only: Boolean("false") is true, so a text value would flip the tile the wrong way.
+  if (typeof online !== 'boolean') return fail(res, 400, 'online must be true or false');
   const c = getCustomer(String(number));
   if (!c) return fail(res, 404, 'no such customer');
   // Wired: same effect as the tile toggle — push tile.presence and, going online,
   // flush the queue with delivered webhooks. effective = group open AND flag on.
   if (services.presence) {
-    const effective = services.presence(c.number, Boolean(online));
-    return res.json({ number: c.number, online: Boolean(online), effective_online: effective });
+    const effective = services.presence(c.number, online);
+    return res.json({ number: c.number, online, effective_online: effective });
   }
-  setOnline(String(number), Boolean(online));
-  return res.json({ number: c.number, online: Boolean(online), effective_online: Boolean(online) });
+  setOnline(String(number), online);
+  return res.json({ number: c.number, online, effective_online: online });
 });
 
 // 9. Inject an inbound message as if typed in a tile (FR-07, FR-13).

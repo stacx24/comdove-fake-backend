@@ -4,8 +4,10 @@
 // database with a fake Comdove, a browser tab and an admin page, runs one scripted
 // session that covers every /api row of TEAM-SPLIT (incl. error cases) and the /ws events
 // the UI receives, and saves each response. Nothing is hand-written, so the fixtures match
-// the code. wamids and timestamps are replaced by stable values so re-running gives the
-// same files; test/fixtures.test.ts fails if the API shape drifts from the saved files.
+// the code. wamids, trace ids and tokens are replaced by stable values; times are replaced by
+// values one second apart that keep their order — they can shift by a step between runs when
+// two events share a millisecond, so test/fixtures.test.ts compares shape and status codes,
+// not values, and fails if the API shape drifts from the saved files.
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -60,7 +62,8 @@ export async function generateFixtures(): Promise<Fixtures> {
   try {
     // --- numbers, groups, admin page ------------------------------------------------
     await call('business-numbers.post', 'POST', '/api/business-numbers', { display_number: BIZ, label: 'Sales', phone_number_id: 'PN-1', waba_id: 'WABA-1', token: 'tok-1' });
-    await call('business-numbers.post.generated-ids', 'POST', '/api/business-numbers', { display_number: '918888800002', label: 'Support' });
+    const generated = await call('business-numbers.post.generated-ids', 'POST', '/api/business-numbers', { display_number: '918888800002', label: 'Support' });
+    const generatedId = (generated.body as { phone_number_id: string }).phone_number_id;
     await call('business-numbers.post.400', 'POST', '/api/business-numbers', { display_number: '12' });
     await call('groups.post', 'POST', '/api/groups', { name: 'alpha', numbers: [T1, '+91 98765-43211'], labels: { [T1]: 'Asha' } });
     await call('', 'POST', '/api/groups', { name: 'beta', numbers: [T3] });
@@ -133,7 +136,7 @@ export async function generateFixtures(): Promise<Fixtures> {
     await call('business-numbers.get', 'GET', '/api/business-numbers');
 
     // --- deletes, resets, errors ----------------------------------------------------------
-    await call('business-numbers.delete', 'DELETE', '/api/business-numbers/MOCK-PN-2');
+    await call('business-numbers.delete', 'DELETE', `/api/business-numbers/${generatedId}`);
     await call('business-numbers.delete.404', 'DELETE', '/api/business-numbers/NOPE');
     await call('groups.delete', 'DELETE', '/api/groups/beta');
     await call('groups.delete.404', 'DELETE', '/api/groups/nope');

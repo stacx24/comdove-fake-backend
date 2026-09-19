@@ -9,7 +9,7 @@
   "status": 400,
   "body": {
     "error": {
-      "message": "mode must be 'manual', 'echo' or 'keyword'"
+      "message": "field 'mode' must be one of manual, echo, keyword"
     }
   }
 }
