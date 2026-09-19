@@ -1,6 +1,6 @@
-// Builds the whole server: P2's SQLite store + control API, P1's Meta face, and the
-// interim delivery until P3's live engine lands. Used by src/index.ts and the
-// integrated e2e test, so tests exercise the exact boot wiring.
+// Builds the whole server: P2's SQLite store + control API, P1's Meta face and P3's
+// live engine (attach it with live.attach(server)). Used by src/index.ts and the
+// integrated e2e tests, so tests exercise the exact boot wiring.
 import express from 'express';
 import swaggerUi from 'swagger-ui-express';
 import { env, type Env } from './config/env.js';
@@ -12,7 +12,7 @@ import { services } from './core/services.js';
 import type { Bus, BusEvent } from './core/ports.js';
 import { SqliteJobStore } from './webhooks/job-store.js';
 import type { DispatcherOptions } from './webhooks/dispatcher.js';
-import { createInterimDelivery } from './dev/interim-delivery.js';
+import { createLiveEngine } from './live.js';
 import { numbersRouter } from './api/numbers.route.js';
 import { groupsRouter } from './api/groups.route.js';
 import { trafficRouter } from './api/traffic.route.js';
@@ -44,21 +44,20 @@ function controlApi() {
 export function composeServer(o: ComposeOptions = {}) {
   const cfg = o.env ?? env;
   const log = o.log ?? ((line: string) => console.log(line));
-  const bus: Bus = o.bus ?? {
-    emit(e: BusEvent) {
-      if (e.type === 'message.status') log(`[bus] ${e.status.padEnd(9)} ${e.wamid} → ${e.number}`);
-      if (e.type === 'message.new') log(`[bus] new ${e.message.direction} ${e.message.wamid}`);
-    },
-  };
-
-  // Delivery and the Meta face reference each other (delivered → lifecycle), so late-bind.
+  // P3's live engine (/ws sessions, bus, delivery). Delivery and the Meta face reference
+  // each other (delivered → lifecycle), so the lifecycle is late-bound.
   let lifecycleRef: ReturnType<typeof createMetaFace>['lifecycle'] | undefined;
-  const delivery = createInterimDelivery({
-    registry: sqliteRegistry,
-    delivered: (msgs) => lifecycleRef?.delivered(msgs),
-    inbound: (from, to, body, source) => lifecycleRef?.inbound(from, to, body, source),
-    log,
-  });
+  const live = createLiveEngine({ lifecycle: () => lifecycleRef, log });
+  const extraBus = o.bus;
+  const bus: Bus = extraBus
+    ? {
+        emit(e: BusEvent) {
+          live.bus.emit(e);
+          extraBus.emit(e); // tests may listen in
+        },
+      }
+    : live.bus;
+  const delivery = live.delivery;
 
   const metaFace = createMetaFace({
     registry: sqliteRegistry,
@@ -78,5 +77,5 @@ export function composeServer(o: ComposeOptions = {}) {
   services.verify = async () => (services.lastVerify = await metaFace.verify());
 
   const app = createApp({ metaFace, controlApi: controlApi() });
-  return { app, metaFace, delivery, bus };
+  return { app, metaFace, delivery, bus, live };
 }
