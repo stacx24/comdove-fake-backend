@@ -7,7 +7,7 @@ Comdove switches to the mock by changing **one env variable**
 (`META_GRAPH_API_BASE_URL` → the mock). No code change in wat-backend.
 
 ## Stack
-Node + TypeScript + Express (WebSocket + SQLite added as build progresses).
+Node + TypeScript + Express + SQLite (better-sqlite3); WebSocket added with the live engine.
 
 ## Getting started
 
@@ -32,17 +32,30 @@ every endpoint. Raw spec at **http://localhost:4020/openapi.json**.
 - `npm test` — unit + end-to-end tests (Node's built-in runner via tsx)
 - `npm run typecheck` — type-checks `src`, `test` and `tools`
 
-## Try the Meta face locally (before P2/P3 land)
-`npm run dev` seeds an in-memory business `MOCK-PN-1` (token `mock-token-dev`) and
-customers `919876543210`–`919876543212`, and treats every tile as online.
+## Try it locally
+Numbers live in SQLite (`DB_PATH`, default `./mock.sqlite`); register them through the
+control API. Until the live engine (WebSocket) lands, a tile counts as online when its
+`/api/presence` flag is on, and auto-replies fire on delivery.
 
 ```bash
 npm run fake-comdove                                            # receiver on :3100
 COMDOVE_WEBHOOK_URL=http://localhost:3100/webhooks/whatsapp npm run dev
 
+curl -X POST localhost:4020/api/business-numbers -H 'Content-Type: application/json' \
+  -d '{"display_number":"918888800001","label":"Sales","phone_number_id":"MOCK-PN-1","waba_id":"MOCK-WABA-1","token":"mock-token-dev"}'
+curl -X POST localhost:4020/api/groups -H 'Content-Type: application/json' \
+  -d '{"name":"alpha","numbers":["919876543210","919876543211"]}'
+
 curl -X POST localhost:4020/v23.0/MOCK-PN-1/messages \
   -H 'Authorization: Bearer mock-token-dev' -H 'Content-Type: application/json' \
   -d '{"messaging_product":"whatsapp","to":"919876543210","type":"text","text":{"body":"hi"}}'
+curl -X POST localhost:4020/api/inject -H 'Content-Type: application/json' \
+  -d '{"from":"919876543210","to":"918888800001","body":"how much?"}'
+curl localhost:4020/api/log
 ```
-The fake Comdove prints `✔ 200 sent …` then `✔ 200 delivered …`. `FAIL_NEXT=3 npm run
-fake-comdove` makes it answer 503 three times so you can watch the retries.
+The fake Comdove prints `✔ 200 sent …`, `✔ 200 delivered …` and `✔ 200 inbound …`.
+`FAIL_NEXT=3 npm run fake-comdove` makes it answer 503 three times so you can watch the
+retries in `/api/log`.
+
+Against a real wat-backend, its local DB must know the same `phone_number_id`,
+`waba_id` and token (build plan §5c).

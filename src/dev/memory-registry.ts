@@ -1,4 +1,4 @@
-// In-memory stand-ins used by tests and by `npm run dev` until P2/P3 land (checkpoint ①).
+// In-memory stand-ins used by unit tests (the running server uses P2's SQLite store).
 import type {
   BusinessNumber,
   Customer,

@@ -1,4 +1,4 @@
-// In-memory stand-ins used by tests and by `npm run dev` until P2/P3 land (checkpoint ①).
+// In-memory stand-ins used by unit tests (the running server uses P2's SQLite store).
 import type { Bus, BusEvent, Delivery, StoredMessage } from '../core/ports.js';
 
 /** Records every event (stand-in for P3's bus). */
