@@ -107,3 +107,14 @@ test('without an admin feed, admin events are dropped quietly', () => {
   bus.emit({ type: 'webhook.verify', ok: false, at: 1, detail: 'down' });
   assert.deepEqual(sent, []);
 });
+
+test('log.rejected goes to the admin feed as the /api/log rejected entry', () => {
+  const got: unknown[] = [];
+  const { bus, sessions, session, sent } = setup({ logChanged: () => {}, verify: () => {}, rejected: (e) => got.push(e) });
+  sessions.add('alpha', session);
+  bus.emit({ type: 'log.rejected', request: { at: 5, phone_number_id: 'PN-1', http_status: 401, code: 190, forced: false, to: T1, body: 'x' } });
+  assert.deepEqual(got, [
+    { wamid: null, time: 5, direction: 'rejected', phone_number_id: 'PN-1', to: T1, body: 'x', http_status: 401, code: 190, subcode: null, forced: false },
+  ]);
+  assert.deepEqual(sent, []);
+});

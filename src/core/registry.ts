@@ -43,6 +43,17 @@ function digitsOnly(n: string): string {
   return String(n).replace(/[^\d]/g, '');
 }
 
+/** Bad input from the caller (the route answers 400); other errors are conflicts (409). */
+export class InvalidInputError extends Error {}
+
+// TEAM-SPLIT "Shared rules": strip +, spaces and dashes; what is left must be 8–15 digits.
+// Anything else (letters, brackets, too short/long) is rejected rather than silently cleaned.
+function phoneNumber(raw: unknown, what: string): string {
+  const cleaned = String(raw ?? '').replace(/[+\s-]/g, '');
+  if (!/^\d{8,15}$/.test(cleaned)) throw new InvalidInputError(`${what} ${JSON.stringify(raw)} must be 8–15 digits`);
+  return cleaned;
+}
+
 // ---------------------------------------------------------------------------
 // Business numbers (FR-01)
 // ---------------------------------------------------------------------------
@@ -56,9 +67,7 @@ export function registerBusinessNumber(input: {
   const count = (db.prepare('SELECT COUNT(*) AS n FROM business_numbers').get() as { n: number }).n;
   if (count >= 10) throw new Error('at most 10 business numbers (PRD scale target)');
 
-  const display_number = digitsOnly(input.display_number);
-  if (display_number.length < 8 || display_number.length > 15)
-    throw new Error('display_number must be 8–15 digits');
+  const display_number = phoneNumber(input.display_number, 'display_number');
 
   const phone_number_id = input.phone_number_id ?? `MOCK-PN-${count + 1}`;
   const token = input.token ?? `mock-token-${randomUUID().slice(0, 12)}`;
@@ -107,7 +116,9 @@ export function createGroup(
   const id = slugify(name);
   if (!id) throw new Error('group name must contain letters or digits');
 
-  const clean = numbers.map(digitsOnly);
+  const clean = numbers.map((n) => phoneNumber(n, 'customer number'));
+  const dup = clean.find((n, i) => clean.indexOf(n) !== i);
+  if (dup) throw new InvalidInputError(`number ${dup} is listed more than once`);
   for (const num of clean) {
     if (getCustomer(num)) throw new Error(`number ${num} is already a customer in another group`);
     if (getBusiness(num)) throw new Error(`number ${num} is a business number`);

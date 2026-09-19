@@ -76,6 +76,7 @@ export type BusEvent =
   | { type: 'message.new'; message: StoredMessage }
   | { type: 'message.status'; wamid: string; number: string; status: Status; at: number }
   | { type: 'log.changed'; wamid: string }
+  | { type: 'log.rejected'; request: RejectedRequest }
   | { type: 'webhook.verify'; ok: boolean; at: number; detail: string };
 
 /** P3 — core/bus.ts */

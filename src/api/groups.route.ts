@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from 'express';
-import { createGroup, listGroups, deleteGroup } from '../core/registry.js';
+import { createGroup, listGroups, deleteGroup, InvalidInputError } from '../core/registry.js';
 import { fail } from './respond.js';
 import { services } from '../core/services.js';
 
@@ -16,7 +16,8 @@ groupsRouter.post('/groups', (req: Request, res: Response) => {
     services.adminChanged?.('groups');
     return res.json(g);
   } catch (err) {
-    return fail(res, 409, err instanceof Error ? err.message : 'could not create group');
+    // Bad numbers are the caller's mistake (400); a number already taken is a conflict (409).
+    return fail(res, err instanceof InvalidInputError ? 400 : 409, err instanceof Error ? err.message : 'could not create group');
   }
 });
 
