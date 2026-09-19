@@ -1,129 +1,198 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { db, now } from '../db/db.js';
+import { getBusiness } from './registry.js';
 
 export type Direction = 'outbound' | 'inbound';
-export type Status = 'queued' | 'sent' | 'delivered' | 'read';
+export type Source = 'api' | 'tile' | 'inject' | 'autoreply';
+export type Status = 'sent' | 'delivered' | 'read';
 
-export interface SaveMessageInput {
-  from: string;
+export interface NewMessage {
+  from: string; // display numbers on both sides
   to: string;
   body: string;
   direction: Direction;
-  status: Status;
+  source: Source;
 }
 
 export interface StoredMessage {
-  id: string;
-  conversation_id: string;
+  wamid: string;
+  conversation_id: number;
+  seq: number;
   direction: Direction;
+  source: Source;
   from_number: string;
   to_number: string;
   body: string;
-  status: Status;
-  webhook_result: string | null;
   created_at: number;
+  sent_at: number | null;
+  delivered_at: number | null;
+  read_at: number | null;
 }
 
-// A mock wamid: "wamid.MOCK-" + unique suffix (BACKEND-BUILD-PLAN §7c).
+// "wamid.MOCK-" + 24 hex chars (plan §7c).
 export function newWamid(): string {
-  return `wamid.MOCK-${randomUUID().replace(/-/g, '').slice(0, 16)}`;
+  return `wamid.MOCK-${randomBytes(12).toString('hex')}`;
 }
 
-// Find or create the conversation for a business<->customer pair. Direction
-// decides which side is the business number.
-function ensureConversation(from: string, to: string, direction: Direction): string {
+// Find/create the conversation for a business<->customer pair and hand out the
+// next per-conversation seq. Direction decides which side is the business.
+function conversationFor(from: string, to: string, direction: Direction): number {
   const business = direction === 'outbound' ? from : to;
   const customer = direction === 'outbound' ? to : from;
-
   const existing = db
-    .prepare(
-      'SELECT id FROM conversations WHERE business_number=? AND customer_number=?',
-    )
-    .get(business, customer) as { id: string } | undefined;
+    .prepare('SELECT id FROM conversations WHERE phone_number_id=? AND customer_number=?')
+    .get(business, customer) as { id: number } | undefined;
   if (existing) return existing.id;
-
-  const id = randomUUID();
-  db.prepare(
-    'INSERT INTO conversations (id, business_number, customer_number) VALUES (?, ?, ?)',
-  ).run(id, business, customer);
-  return id;
+  const info = db
+    .prepare('INSERT INTO conversations (phone_number_id, customer_number, next_seq) VALUES (?, ?, 1)')
+    .run(business, customer);
+  return Number(info.lastInsertRowid);
 }
 
-// Save a message and return it. Person 1 (send) and Person 3 (tile reply) both
-// call this.
-export function saveMessage(input: SaveMessageInput): StoredMessage {
-  const id = newWamid();
-  const conversation_id = ensureConversation(input.from, input.to, input.direction);
+// Store a message in one transaction (conversation, seq, insert). Outbound is
+// created 'sent' (sent_at set); inbound has no status timeline.
+export function storeMessage(m: NewMessage): StoredMessage {
+  const wamid = newWamid();
   const created_at = now();
-
-  db.prepare(
-    `INSERT INTO messages
-       (id, conversation_id, direction, from_number, to_number, body, status, created_at,
-        sent_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(
-    id,
-    conversation_id,
-    input.direction,
-    input.from,
-    input.to,
-    input.body,
-    input.status,
-    created_at,
-    input.status === 'sent' ? created_at : null,
-  );
-
+  const tx = db.transaction(() => {
+    const conversation_id = conversationFor(m.from, m.to, m.direction);
+    const seqRow = db.prepare('SELECT next_seq FROM conversations WHERE id=?').get(conversation_id) as {
+      next_seq: number;
+    };
+    const seq = seqRow.next_seq;
+    db.prepare('UPDATE conversations SET next_seq=? WHERE id=?').run(seq + 1, conversation_id);
+    const sent_at = m.direction === 'outbound' ? created_at : null;
+    db.prepare(
+      `INSERT INTO messages (wamid, conversation_id, seq, direction, source, from_number, to_number, body, created_at, sent_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(wamid, conversation_id, seq, m.direction, m.source, m.from, m.to, m.body, created_at, sent_at);
+    return { conversation_id, seq };
+  });
+  const { conversation_id, seq } = tx();
   return {
-    id,
+    wamid,
     conversation_id,
-    direction: input.direction,
-    from_number: input.from,
-    to_number: input.to,
-    body: input.body,
-    status: input.status,
-    webhook_result: null,
+    seq,
+    direction: m.direction,
+    source: m.source,
+    from_number: m.from,
+    to_number: m.to,
+    body: m.body,
     created_at,
+    sent_at: m.direction === 'outbound' ? created_at : null,
+    delivered_at: null,
+    read_at: null,
   };
 }
 
-// Update a message's status timeline. Person 1/3 call this as statuses advance.
-export function updateStatus(wamid: string, status: Status): void {
-  const column =
-    status === 'delivered' ? 'delivered_at' : status === 'read' ? 'read_at' : 'sent_at';
-  db.prepare(`UPDATE messages SET status=?, ${column}=? WHERE id=?`).run(
-    status,
-    now(),
-    wamid,
-  );
+export function getMessage(wamid: string): StoredMessage | null {
+  return (db.prepare('SELECT * FROM messages WHERE wamid=?').get(wamid) as StoredMessage) ?? null;
 }
 
-// Record the webhook delivery outcome for the admin log (Person 1 calls this).
-export function setWebhookResult(wamid: string, result: string): void {
-  db.prepare('UPDATE messages SET webhook_result=? WHERE id=?').run(result, wamid);
+export function setDelivered(wamid: string, at: number): void {
+  db.prepare('UPDATE messages SET delivered_at=COALESCE(delivered_at, ?) WHERE wamid=?').run(at, wamid);
 }
 
-// Admin live log, newest first (FR-11).
-export function getLog(limit = 100): StoredMessage[] {
+export function setRead(wamids: string[], at: number): void {
+  const stmt = db.prepare('UPDATE messages SET read_at=COALESCE(read_at, ?) WHERE wamid=?');
+  const tx = db.transaction((ids: string[]) => ids.forEach((id) => stmt.run(at, id)));
+  tx(wamids);
+}
+
+// Outbound messages not yet delivered, per conversation, in seq order (the queue).
+export function queuedFor(customerNumber: string): StoredMessage[] {
   return db
     .prepare(
-      `SELECT id, conversation_id, direction, from_number, to_number, body, status,
-              webhook_result, created_at, sent_at, delivered_at, read_at
-         FROM messages ORDER BY created_at DESC LIMIT ?`,
+      `SELECT m.* FROM messages m JOIN conversations c ON c.id = m.conversation_id
+        WHERE c.customer_number = ? AND m.direction='outbound' AND m.delivered_at IS NULL
+        ORDER BY m.conversation_id, m.seq`,
     )
-    .all(limit) as StoredMessage[];
+    .all(customerNumber) as StoredMessage[];
 }
 
-// Wipe messages/queues. Keep numbers + groups unless keepNumbers is false (FR-12).
-export function resetAll(keepNumbers = true): void {
-  const tx = db.transaction(() => {
-    db.prepare('DELETE FROM messages').run();
-    db.prepare('DELETE FROM conversations').run();
-    if (!keepNumbers) {
-      db.prepare('DELETE FROM group_members').run();
-      db.prepare('DELETE FROM presence').run();
-      db.prepare('DELETE FROM groups').run();
-      db.prepare('DELETE FROM numbers').run();
-    }
-  });
-  tx();
+export function history(customerNumber: string): StoredMessage[] {
+  return db
+    .prepare(
+      `SELECT m.* FROM messages m JOIN conversations c ON c.id = m.conversation_id
+        WHERE c.customer_number = ? ORDER BY m.created_at, m.seq`,
+    )
+    .all(customerNumber) as StoredMessage[];
+}
+
+function statusOf(m: StoredMessage): Status {
+  return m.read_at ? 'read' : m.delivered_at ? 'delivered' : 'sent';
+}
+
+// One admin-log entry (plan §10c). Shared by GET /api/log and the admin feed.
+export interface LogEntry {
+  wamid: string;
+  time: number;
+  direction: Direction;
+  source: Source;
+  from: string;
+  to: string;
+  business: { phone_number_id: string; label: string | null } | null;
+  group_id: string | null;
+  body: string;
+  status: Status;
+  timeline: Array<{ status: Status; at: number }>;
+  webhooks: Array<{
+    kind: string;
+    state: string;
+    attempts: Array<{ n: number; http_status: number | null; duration_ms: number | null; at: number }>;
+  }>;
+}
+
+function toLogEntry(m: StoredMessage): LogEntry {
+  const businessNumber = m.direction === 'outbound' ? m.from_number : m.to_number;
+  const customerNumber = m.direction === 'outbound' ? m.to_number : m.from_number;
+  const biz = getBusiness(businessNumber);
+  const group = db
+    .prepare('SELECT group_id FROM customers WHERE number=?')
+    .get(customerNumber) as { group_id: string } | undefined;
+
+  const timeline: Array<{ status: Status; at: number }> = [];
+  if (m.sent_at) timeline.push({ status: 'sent', at: m.sent_at });
+  if (m.delivered_at) timeline.push({ status: 'delivered', at: m.delivered_at });
+  if (m.read_at) timeline.push({ status: 'read', at: m.read_at });
+
+  const jobs = db
+    .prepare('SELECT id, kind, state FROM webhook_jobs WHERE wamid=? ORDER BY id')
+    .all(m.wamid) as Array<{ id: number; kind: string; state: string }>;
+  const webhooks = jobs.map((j) => ({
+    kind: j.kind,
+    state: j.state,
+    attempts: (
+      db
+        .prepare('SELECT attempt, http_status, duration_ms, at FROM webhook_attempts WHERE job_id=? ORDER BY attempt')
+        .all(j.id) as Array<{ attempt: number; http_status: number | null; duration_ms: number | null; at: number }>
+    ).map((a) => ({ n: a.attempt, http_status: a.http_status, duration_ms: a.duration_ms, at: a.at })),
+  }));
+
+  return {
+    wamid: m.wamid,
+    time: m.created_at,
+    direction: m.direction,
+    source: m.source,
+    from: m.from_number,
+    to: m.to_number,
+    business: biz ? { phone_number_id: biz.phone_number_id, label: biz.label } : null,
+    group_id: group?.group_id ?? null,
+    body: m.body,
+    status: statusOf(m),
+    timeline,
+    webhooks,
+  };
+}
+
+export function getLogEntry(wamid: string): LogEntry | null {
+  const m = getMessage(wamid);
+  return m ? toLogEntry(m) : null;
+}
+
+export function getLog(limit = 100): LogEntry[] {
+  const rows = db
+    .prepare('SELECT * FROM messages ORDER BY created_at DESC LIMIT ?')
+    .all(limit) as StoredMessage[];
+  return rows.map(toLogEntry);
 }

@@ -9,4 +9,7 @@ export const env = {
   APP_SECRET: process.env.APP_SECRET ?? 'mock-app-secret-1',
   WEBHOOK_VERIFY_TOKEN: process.env.WEBHOOK_VERIFY_TOKEN ?? 'mock-verify-1',
   DB_PATH: process.env.DB_PATH ?? './mock.sqlite',
+  // Wait before a message's first status webhook so Comdove has stored the wamid
+  // (plan §9f, avoids UNKNOWN_WAMID). Used by Person 1.
+  STATUS_WEBHOOK_DELAY_MS: Number(process.env.STATUS_WEBHOOK_DELAY_MS ?? 500),
 };
