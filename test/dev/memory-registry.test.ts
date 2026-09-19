@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MemoryRegistry } from './registry.js';
+import { MemoryRegistry } from '../../src/dev/memory-registry.js';
 
 test('stub registry: conversations get their own id and increasing seq', () => {
   const reg = new MemoryRegistry().seed({ business: [{}, {}], customers: [{}] });

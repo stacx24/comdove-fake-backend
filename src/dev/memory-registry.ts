@@ -1,3 +1,4 @@
+// In-memory stand-ins used by tests and by `npm run dev` until P2/P3 land (checkpoint ①).
 import type {
   BusinessNumber,
   Customer,
@@ -5,7 +6,7 @@ import type {
   Registry,
   RejectedRequest,
   StoredMessage,
-} from '../../src/core/ports.js';
+} from '../core/ports.js';
 
 /** In-memory stand-in for P2's registry. Same contract, no SQLite. */
 export class MemoryRegistry implements Registry {

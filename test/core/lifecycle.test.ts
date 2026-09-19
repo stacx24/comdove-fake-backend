@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createLifecycle, LifecycleError } from '../../src/core/lifecycle.js';
 import type { EnqueueInput } from '../../src/webhooks/dispatcher.js';
-import { MemoryRegistry } from '../stubs/registry.js';
-import { RecordingBus } from '../stubs/bus.js';
+import { MemoryRegistry } from '../../src/dev/memory-registry.js';
+import { RecordingBus } from '../../src/dev/memory-bus.js';
 
 const NOW = 1_758_270_000_000;
 

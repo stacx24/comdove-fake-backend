@@ -1,4 +1,5 @@
-import type { Bus, BusEvent, Delivery, StoredMessage } from '../../src/core/ports.js';
+// In-memory stand-ins used by tests and by `npm run dev` until P2/P3 land (checkpoint ①).
+import type { Bus, BusEvent, Delivery, StoredMessage } from '../core/ports.js';
 
 /** Records every event (stand-in for P3's bus). */
 export class RecordingBus implements Bus {

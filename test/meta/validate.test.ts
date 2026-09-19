@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { validate, type ValidateInput, type ValidateResult } from '../../src/meta/validate.js';
-import { MemoryRegistry } from '../stubs/registry.js';
+import { MemoryRegistry } from '../../src/dev/memory-registry.js';
 
 function setup() {
   const reg = new MemoryRegistry().seed({

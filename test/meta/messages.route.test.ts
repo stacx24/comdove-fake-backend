@@ -4,8 +4,8 @@ import express from 'express';
 import { createMetaRouter, metaNotImplemented } from '../../src/meta/messages.route.js';
 import { createLifecycle } from '../../src/core/lifecycle.js';
 import type { EnqueueInput } from '../../src/webhooks/dispatcher.js';
-import { MemoryRegistry } from '../stubs/registry.js';
-import { FakeDelivery, RecordingBus } from '../stubs/bus.js';
+import { MemoryRegistry } from '../../src/dev/memory-registry.js';
+import { FakeDelivery, RecordingBus } from '../../src/dev/memory-bus.js';
 import { listen, waitFor } from '../helpers/http.js';
 
 const watBody = { messaging_product: 'whatsapp', to: '919876543210', type: 'text', text: { body: 'Hello from Comdove' } };
