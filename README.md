@@ -59,3 +59,17 @@ retries in `/api/log`.
 
 Against a real wat-backend, its local DB must know the same `phone_number_id`,
 `waba_id` and token (build plan §5c).
+
+## Contract (shared with the UI team)
+
+The WebSocket and API shapes are frozen in `src/contract/`:
+
+- `src/contract/ws-events.ts` — every frame on `ws://localhost:4020/ws`
+  (6 client→server, 8 server→group-session and 6 admin-feed events), the error codes,
+  and `parseClientEvent()` / `encodeEvent()`.
+- `src/contract/api-types.ts` — shapes shared by `/api/*` and the admin feed
+  (`LogEntryDTO`, `GroupSummaryDTO`, `BusinessNumberDTO`, ...; owned by Person 2).
+
+Design: `docs/superpowers/specs/2026-09-19-ws-events-contract-design.md`.
+Any change after the freeze updates these files and is announced to the UI team
+the same day.

@@ -30,6 +30,8 @@ export const env = {
   // Wait before a message's first status webhook so Comdove has stored the wamid
   // (plan §9f, avoids UNKNOWN_WAMID).
   STATUS_WEBHOOK_DELAY_MS: num('STATUS_WEBHOOK_DELAY_MS', 500),
+  // WebSocket heartbeat: ping every N ms; a client that misses a pong is dropped (FR-16).
+  WS_HEARTBEAT_MS: num('WS_HEARTBEAT_MS', 15000),
 };
 
 export type Env = typeof env;
