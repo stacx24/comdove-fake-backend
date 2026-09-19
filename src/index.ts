@@ -20,4 +20,8 @@ const server = app.listen(env.PORT, () => {
 
 // WebSocket: group sessions + lock + heartbeat. Still on in-memory groups `alpha` and
 // `beta` until P3 plugs P2's store in behind GroupDirectory (checkpoint ①).
-attachWsServer(server, { lock: createLockTable(), groups: createMemoryGroups(DEV_GROUPS) });
+attachWsServer(server, {
+  lock: createLockTable(),
+  groups: createMemoryGroups(DEV_GROUPS),
+  heartbeatMs: env.WS_HEARTBEAT_MS,
+});
