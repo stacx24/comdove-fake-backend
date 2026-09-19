@@ -82,7 +82,7 @@ test('admin.subscribe sets the admin role, and the role is then fixed', () => {
   const { socket, session } = open();
   session.handle({ type: 'admin.subscribe' });
   assert.deepEqual(session.role, { kind: 'admin' });
-  assert.deepEqual(socket.sent, []);
+  assert.equal(socket.sent.length, 0); // not deepEqual(..., []): that narrows `sent` to never[]
   session.handle({ type: 'group.claim', group: 'alpha' });
   session.handle({ type: 'admin.subscribe' });
   assert.deepEqual(
