@@ -32,6 +32,8 @@ export interface MetaErrorContext {
   detail?: string;
   method?: string;
   path?: string;
+  /** What is unsupported, e.g. 'message type "image"'. Defaults to "{method} {path}". */
+  what?: string;
 }
 
 interface Entry {
@@ -64,7 +66,7 @@ const CATALOGUE: Record<MetaErrorKind, Entry> = {
   not_implemented: {
     status: 400,
     code: 100,
-    message: (c) => `(#100) ${c.method ?? 'POST'} ${c.path ?? ''} is not implemented in comdove-mock`,
+    message: (c) => `(#100) ${c.what ?? `${c.method ?? 'POST'} ${c.path ?? ''}`} is not implemented in comdove-mock`,
   },
   undeliverable: {
     status: 400,

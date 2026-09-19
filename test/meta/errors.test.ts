@@ -81,3 +81,7 @@ test('wat-backend readMetaError sees numeric code/subcode and string trace/type'
   assert.equal(typeof e.type, 'string');
   assert.equal(typeof e.fbtrace_id, 'string');
 });
+
+test('not_implemented can describe a feature instead of a path', () => {
+  assert.equal(metaError('not_implemented', { what: 'message type "image"' }).body.error.message, '(#100) message type "image" is not implemented in comdove-mock');
+});
