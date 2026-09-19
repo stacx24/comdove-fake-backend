@@ -251,8 +251,45 @@ tile you switched off → `tile_offline`.
 `message.status … delivered` for each. Terminal 1: `✔ 200 delivered` twice, in send order.
 ✅ Type the `chat.read` line from Test 12 → `read` for both.
 
+### Test 14 — Live admin feed (admin page over `/ws`)
+**Terminal 5 — an admin page** (stand-in for the admin UI; keep it open):
+```bash
+cd ~/Projects/comdov-mock-backend
+node --input-type=module -e '
+const { WebSocket } = await import("ws");
+const ws = new WebSocket("ws://localhost:4021/ws");
+ws.on("open", () => ws.send(JSON.stringify({ type: "admin.subscribe" })));
+ws.on("message", (d) => { const f = JSON.parse(String(d));
+  console.log("[admin]", f.type, f.entry ? `${f.entry.body} ${f.entry.status}` : f.groups ? f.groups.map(g => `${g.id}:${g.status}`).join(",") : ""); });'
+```
+✅ At once: `[admin] groups.update alpha:locked` (Terminal 4 holds it) and `[admin] numbers.update`.
+
+Then, with Terminal 5 open:
+1. Send a message from Comdove (Test 2).
+   ✅ `[admin] log.entry Hello sent`, then `[admin] log.update Hello delivered` (more `log.update`
+   lines follow as each webhook attempt lands).
+2. Ctrl+C in Terminal 4. ✅ `[admin] groups.update alpha:free`. Reopen the tab
+   (`PORT=4021 npm run tab -- alpha`) → `alpha:locked` again.
+3. `curl -s -X POST $M/api/presence -H 'Content-Type: application/json' -d '{"number":"919876543211","online":false}'; echo`
+   ✅ `[admin] numbers.update` (the customer now shows `online:false`).
+4. `curl -s -X POST $M/api/webhook/verify; echo` ✅ `[admin] webhook.verify`.
+
+The admin page loads older history itself with `GET $M/api/log`, and should update log rows
+by `wamid` for both `log.entry` and `log.update`. Rejected Meta requests (Test 3) show only
+in `GET /api/log`, not live.
+
+### Test 15 — Reset with a tab open (demo step 10)
+Keep Terminals 4 and 5 open.
+1. Keep numbers: `curl -s -X POST $M/reset -H 'Content-Type: application/json' -d '{}'; echo`
+   ✅ Terminal 4: a fresh `group.claimed alpha: …(0 msgs, 0 queued)` — the tab keeps the group.
+   ✅ Terminal 5: `[admin] log.reset`, then `groups.update` and `numbers.update`.
+2. Wipe numbers: `curl -s -X POST $M/reset -H 'Content-Type: application/json' -d '{"keep_numbers":false}'; echo`
+   ✅ Terminal 4: `{"type":"error","code":"group_deleted",…}` then `[tab] closed`.
+   ✅ Terminal 5: `[admin] groups.update` with no groups.
+   Run the Terminal 3 set-up again before any other test.
+
 ### Clean up
-Ctrl+C in Terminals 1, 2 and 4, then:
+Ctrl+C in Terminals 1, 2, 4 and 5, then:
 ```bash
 rm manual-test.sqlite*
 ```
@@ -349,9 +386,11 @@ retry; after restoring the token the next send was `SENT`.
 | Tile opens chat → read webhooks + ticks | Test 12 |
 | Close / reopen group → queued, late delivered, read | Test 13 |
 | Verify handshake, lock shown in `/api/groups` | Test 1 |
+| Live admin feed (log, groups, numbers, verify) | Test 14 |
+| Reset refreshes open tabs; wipe closes them (`group_deleted`) | Test 15 |
 | Everything with the real Comdove | Part 3 |
 | Demo step 9 — Comdove handles Meta's 401/190 | Part 4 |
 | All code paths | Part 1 (`npm test`) |
 
-**Not built yet (Person 3):** the admin live feed over `/ws` (`log.entry` / `log.update`,
-`groups.update`, `numbers.update`) and refreshing open tabs after a reset.
+**Not live yet (team decision):** rejected Meta requests appear only in `GET /api/log`; pushing
+them over the admin feed needs a `LogEntryDTO` contract change.
