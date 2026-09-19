@@ -84,3 +84,65 @@ export class MemoryJobStore implements JobStore {
     this.attemptRows = [];
   }
 }
+
+/** The subset of better-sqlite3's Database this store uses (keeps the type import light). */
+interface SqliteDb {
+  prepare(sql: string): {
+    run(...params: unknown[]): { lastInsertRowid: number | bigint };
+    get(...params: unknown[]): unknown;
+    all(...params: unknown[]): unknown[];
+  };
+}
+
+type JobRow = Omit<Job, 'not_before'>;
+const JOB_COLUMNS = 'id, conversation_id, wamid, kind, payload, state, created_at, finished_at';
+const toJob = (r: JobRow): Job => ({ ...r, not_before: 0 });
+
+/**
+ * Jobs + attempts in P2's SQLite tables (build plan §6). not_before is not a column:
+ * after a restart every pending job is eligible immediately, so it reads back as 0.
+ */
+export class SqliteJobStore implements JobStore {
+  constructor(private db: SqliteDb) {}
+
+  insert(j: NewJob): Job {
+    const info = this.db
+      .prepare('INSERT INTO webhook_jobs (conversation_id, wamid, kind, payload, state, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(j.conversation_id, j.wamid, j.kind, j.payload, 'pending', j.created_at);
+    return { ...j, id: Number(info.lastInsertRowid), state: 'pending', finished_at: null };
+  }
+
+  get(id: number): Job | null {
+    const r = this.db.prepare(`SELECT ${JOB_COLUMNS} FROM webhook_jobs WHERE id=?`).get(id) as JobRow | undefined;
+    return r ? toJob(r) : null;
+  }
+
+  addAttempt(a: Attempt): void {
+    this.db
+      .prepare('INSERT INTO webhook_attempts (job_id, attempt, http_status, error, duration_ms, at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(a.job_id, a.attempt, a.http_status, a.error, a.duration_ms, a.at);
+  }
+
+  finish(id: number, state: 'ok' | 'failed', at: number): void {
+    this.db.prepare('UPDATE webhook_jobs SET state=?, finished_at=? WHERE id=?').run(state, at, id);
+  }
+
+  pending(): Job[] {
+    return (this.db.prepare(`SELECT ${JOB_COLUMNS} FROM webhook_jobs WHERE state='pending' ORDER BY id`).all() as JobRow[]).map(toJob);
+  }
+
+  attempts(jobId: number): Attempt[] {
+    return this.db
+      .prepare('SELECT job_id, attempt, http_status, error, duration_ms, at FROM webhook_attempts WHERE job_id=? ORDER BY id')
+      .all(jobId) as Attempt[];
+  }
+
+  jobsFor(wamid: string): Job[] {
+    return (this.db.prepare(`SELECT ${JOB_COLUMNS} FROM webhook_jobs WHERE wamid=? ORDER BY id`).all(wamid) as JobRow[]).map(toJob);
+  }
+
+  clear(): void {
+    this.db.prepare('DELETE FROM webhook_attempts').run();
+    this.db.prepare('DELETE FROM webhook_jobs').run();
+  }
+}
