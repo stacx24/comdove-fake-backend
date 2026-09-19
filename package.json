@@ -1,0 +1,32 @@
+{
+  "name": "comdove-fake-backend",
+  "version": "1.0.0",
+  "description": "Fake WhatsApp / Meta Cloud API mock server for testing Comdove (wat-backend) end to end.",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stacxio/comdove-fake-backend.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/stacxio/comdove-fake-backend/issues"
+  },
+  "homepage": "https://github.com/stacxio/comdove-fake-backend#readme",
+  "dependencies": {
+    "dotenv": "^18.0.1",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.2",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  }
+}
