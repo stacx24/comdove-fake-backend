@@ -53,6 +53,9 @@ curl -X POST localhost:4020/api/inject -H 'Content-Type: application/json' \
   -d '{"from":"919876543210","to":"918888800001","body":"how much?"}'
 curl localhost:4020/api/log
 ```
+A message is **delivered** only while its group is open in a browser tab. Without the UI,
+`npm run tab -- alpha` opens the group from the terminal, prints every pushed event, and sends
+the JSON frames you type (e.g. `chat.read`, `message.send`). Full guide: `docs/TESTING-P1.md`.
 The fake Comdove prints `✔ 200 sent …`, `✔ 200 delivered …` and `✔ 200 inbound …`.
 `FAIL_NEXT=3 npm run fake-comdove` makes it answer 503 three times so you can watch the
 retries in `/api/log`.
