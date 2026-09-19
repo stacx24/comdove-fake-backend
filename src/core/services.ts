@@ -22,6 +22,10 @@ export interface Services {
   presence?: (number: string, online: boolean) => boolean;
   /** P3 live engine — show a changed auto-reply config in the open tile. */
   autoReplyChanged?: (number: string, ar: { mode: 'manual' | 'echo' | 'keyword'; delay_ms: number; rules: Array<{ keyword: string; reply: string }> }) => void;
+  /** P3 live engine — the admin lists changed ('groups' also refreshes customers). */
+  adminChanged?: (what: 'groups' | 'numbers') => void;
+  /** P3 live engine — after /api/reset: log.reset + lists to admins; fresh snapshot or group_deleted to open tabs. */
+  afterReset?: (keepNumbers: boolean) => void;
 }
 
 export const services: Services = {};

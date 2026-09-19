@@ -76,7 +76,12 @@ export function composeServer(o: ComposeOptions = {}) {
   services.cancelWebhooks = () => metaFace.dispatcher.cancelAll();
   services.verify = async () => (services.lastVerify = await metaFace.verify());
   services.presence = live.groupEvents.setPresence;
-  services.autoReplyChanged = live.groupEvents.autoReplyChanged;
+  services.autoReplyChanged = (number, ar) => {
+    live.groupEvents.autoReplyChanged(number, ar);
+    live.admin.numbersChanged(); // reply_mode is in the customers list
+  };
+  services.adminChanged = live.adminChanged;
+  services.afterReset = live.reset;
 
   const app = createApp({ metaFace, controlApi: controlApi() });
   return { app, metaFace, delivery, bus, live };

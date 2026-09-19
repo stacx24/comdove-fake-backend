@@ -15,7 +15,7 @@ function doReset(req: Request, res: Response) {
   const keep = req.body?.keep_numbers !== false; // default true
   services.cancelWebhooks?.(); // stop in-flight retries BEFORE their rows are deleted
   resetAll(keep);
-  // TODO(Person 3): emit log.reset / groups.update to the admin feed
+  services.afterReset?.(keep); // admins: log.reset + lists; open tabs: fresh snapshot or group_deleted
   return res.json({ ok: true, kept_numbers: keep });
 }
 systemRouter.post('/api/reset', doReset);

@@ -175,6 +175,8 @@ test('E2E-3 admin feed role is fixed and cannot act on tiles', E2E, async () => 
   try {
     const admin = await connect(app.ws);
     admin.send({ type: 'admin.subscribe' });
+    assert.equal((await admin.next()).type, 'groups.update');
+    assert.equal((await admin.next()).type, 'numbers.update');
     admin.send({ type: 'group.claim', group: 'alpha' });
     assert.equal((await admin.next()).code, 'already_claimed');
     admin.send({ type: 'tile.presence', number: '919876543210', online: false });
