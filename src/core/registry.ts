@@ -233,6 +233,7 @@ export function resetAll(keepNumbers = true): void {
   const tx = db.transaction(() => {
     db.prepare('DELETE FROM webhook_attempts').run();
     db.prepare('DELETE FROM webhook_jobs').run();
+    db.prepare('DELETE FROM rejected_requests').run();
     db.prepare('DELETE FROM messages').run();
     db.prepare('DELETE FROM conversations').run();
     if (!keepNumbers) {

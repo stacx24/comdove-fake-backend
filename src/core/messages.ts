@@ -12,6 +12,10 @@ export interface NewMessage {
   body: string;
   direction: Direction;
   source: Source;
+  /** Person 1 passes the wamid it already generated; otherwise one is made here. */
+  wamid?: string;
+  /** ms; defaults to now(). */
+  at?: number;
 }
 
 export interface StoredMessage {
@@ -20,6 +24,8 @@ export interface StoredMessage {
   seq: number;
   direction: Direction;
   source: Source;
+  phone_number_id: string; // business side (from conversations)
+  customer_number: string; // customer side (from conversations)
   from_number: string;
   to_number: string;
   body: string;
@@ -34,28 +40,36 @@ export function newWamid(): string {
   return `wamid.MOCK-${randomBytes(12).toString('hex')}`;
 }
 
+// Messages joined with their conversation, so every row carries phone_number_id +
+// customer_number (Person 1's lifecycle keys webhooks and reads on those).
+const SELECT_MESSAGE = `SELECT m.*, c.phone_number_id, c.customer_number
+  FROM messages m JOIN conversations c ON c.id = m.conversation_id`;
+
 // Find/create the conversation for a business<->customer pair and hand out the
 // next per-conversation seq. Direction decides which side is the business.
-function conversationFor(from: string, to: string, direction: Direction): number {
-  const business = direction === 'outbound' ? from : to;
-  const customer = direction === 'outbound' ? to : from;
+// conversations.phone_number_id stores the business's phone_number_id (not its
+// display number), so it matches business_numbers and Meta's metadata.
+function conversationFor(from: string, to: string, direction: Direction): { id: number; phone_number_id: string; customer_number: string } {
+  const businessKey = direction === 'outbound' ? from : to;
+  const customer_number = direction === 'outbound' ? to : from;
+  const phone_number_id = getBusiness(businessKey)?.phone_number_id ?? businessKey;
   const existing = db
     .prepare('SELECT id FROM conversations WHERE phone_number_id=? AND customer_number=?')
-    .get(business, customer) as { id: number } | undefined;
-  if (existing) return existing.id;
+    .get(phone_number_id, customer_number) as { id: number } | undefined;
+  if (existing) return { id: existing.id, phone_number_id, customer_number };
   const info = db
     .prepare('INSERT INTO conversations (phone_number_id, customer_number, next_seq) VALUES (?, ?, 1)')
-    .run(business, customer);
-  return Number(info.lastInsertRowid);
+    .run(phone_number_id, customer_number);
+  return { id: Number(info.lastInsertRowid), phone_number_id, customer_number };
 }
 
 // Store a message in one transaction (conversation, seq, insert). Outbound is
 // created 'sent' (sent_at set); inbound has no status timeline.
 export function storeMessage(m: NewMessage): StoredMessage {
-  const wamid = newWamid();
-  const created_at = now();
+  const wamid = m.wamid ?? newWamid();
+  const created_at = m.at ?? now();
   const tx = db.transaction(() => {
-    const conversation_id = conversationFor(m.from, m.to, m.direction);
+    const { id: conversation_id, phone_number_id, customer_number } = conversationFor(m.from, m.to, m.direction);
     const seqRow = db.prepare('SELECT next_seq FROM conversations WHERE id=?').get(conversation_id) as {
       next_seq: number;
     };
@@ -66,15 +80,17 @@ export function storeMessage(m: NewMessage): StoredMessage {
       `INSERT INTO messages (wamid, conversation_id, seq, direction, source, from_number, to_number, body, created_at, sent_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(wamid, conversation_id, seq, m.direction, m.source, m.from, m.to, m.body, created_at, sent_at);
-    return { conversation_id, seq };
+    return { conversation_id, seq, phone_number_id, customer_number };
   });
-  const { conversation_id, seq } = tx();
+  const { conversation_id, seq, phone_number_id, customer_number } = tx();
   return {
     wamid,
     conversation_id,
     seq,
     direction: m.direction,
     source: m.source,
+    phone_number_id,
+    customer_number,
     from_number: m.from,
     to_number: m.to,
     body: m.body,
@@ -86,11 +102,25 @@ export function storeMessage(m: NewMessage): StoredMessage {
 }
 
 export function getMessage(wamid: string): StoredMessage | null {
-  return (db.prepare('SELECT * FROM messages WHERE wamid=?').get(wamid) as StoredMessage) ?? null;
+  return (db.prepare(`${SELECT_MESSAGE} WHERE m.wamid=?`).get(wamid) as StoredMessage) ?? null;
 }
 
-export function setDelivered(wamid: string, at: number): void {
-  db.prepare('UPDATE messages SET delivered_at=COALESCE(delivered_at, ?) WHERE wamid=?').run(at, wamid);
+export function setDelivered(wamids: string | string[], at: number): void {
+  const stmt = db.prepare('UPDATE messages SET delivered_at=COALESCE(delivered_at, ?) WHERE wamid=?');
+  const tx = db.transaction((ids: string[]) => ids.forEach((id) => stmt.run(at, id)));
+  tx(Array.isArray(wamids) ? wamids : [wamids]);
+}
+
+// Outbound messages in one chat that are delivered but not yet read, in seq order
+// (what a chat.read turns into read webhooks — Person 1's lifecycle.read).
+export function unreadDelivered(customerNumber: string, phoneNumberId: string): StoredMessage[] {
+  return db
+    .prepare(
+      `${SELECT_MESSAGE} WHERE c.customer_number = ? AND c.phone_number_id = ?
+         AND m.direction='outbound' AND m.delivered_at IS NOT NULL AND m.read_at IS NULL
+       ORDER BY m.seq`,
+    )
+    .all(customerNumber, phoneNumberId) as StoredMessage[];
 }
 
 export function setRead(wamids: string[], at: number): void {
@@ -103,7 +133,7 @@ export function setRead(wamids: string[], at: number): void {
 export function queuedFor(customerNumber: string): StoredMessage[] {
   return db
     .prepare(
-      `SELECT m.* FROM messages m JOIN conversations c ON c.id = m.conversation_id
+      `${SELECT_MESSAGE}
         WHERE c.customer_number = ? AND m.direction='outbound' AND m.delivered_at IS NULL
         ORDER BY m.conversation_id, m.seq`,
     )
@@ -113,7 +143,7 @@ export function queuedFor(customerNumber: string): StoredMessage[] {
 export function history(customerNumber: string): StoredMessage[] {
   return db
     .prepare(
-      `SELECT m.* FROM messages m JOIN conversations c ON c.id = m.conversation_id
+      `${SELECT_MESSAGE}
         WHERE c.customer_number = ? ORDER BY m.created_at, m.seq`,
     )
     .all(customerNumber) as StoredMessage[];
@@ -139,17 +169,47 @@ export interface LogEntry {
   webhooks: Array<{
     kind: string;
     state: string;
-    attempts: Array<{ n: number; http_status: number | null; duration_ms: number | null; at: number }>;
+    attempts: Array<{ n: number; http_status: number | null; error: string | null; duration_ms: number | null; at: number }>;
   }>;
 }
 
+// A Meta request the emulator rejected (plan §8c, §10c): no wamid, never stored as a message.
+export interface RejectedLogEntry {
+  wamid: null;
+  time: number;
+  direction: 'rejected';
+  phone_number_id: string;
+  to: string | null;
+  body: string | null;
+  http_status: number;
+  code: number;
+  subcode: number | null;
+  forced: boolean;
+}
+
+export interface RejectedRequest {
+  at: number;
+  phone_number_id: string;
+  http_status: number;
+  code: number;
+  subcode?: number;
+  forced: boolean;
+  to?: string;
+  body?: string;
+}
+
+export function logRejected(r: RejectedRequest): void {
+  db.prepare(
+    `INSERT INTO rejected_requests (at, phone_number_id, http_status, code, subcode, forced, to_number, body)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(r.at, r.phone_number_id, r.http_status, r.code, r.subcode ?? null, r.forced ? 1 : 0, r.to ?? null, r.body ?? null);
+}
+
 function toLogEntry(m: StoredMessage): LogEntry {
-  const businessNumber = m.direction === 'outbound' ? m.from_number : m.to_number;
-  const customerNumber = m.direction === 'outbound' ? m.to_number : m.from_number;
-  const biz = getBusiness(businessNumber);
+  const biz = getBusiness(m.phone_number_id);
   const group = db
     .prepare('SELECT group_id FROM customers WHERE number=?')
-    .get(customerNumber) as { group_id: string } | undefined;
+    .get(m.customer_number) as { group_id: string } | undefined;
 
   const timeline: Array<{ status: Status; at: number }> = [];
   if (m.sent_at) timeline.push({ status: 'sent', at: m.sent_at });
@@ -164,9 +224,9 @@ function toLogEntry(m: StoredMessage): LogEntry {
     state: j.state,
     attempts: (
       db
-        .prepare('SELECT attempt, http_status, duration_ms, at FROM webhook_attempts WHERE job_id=? ORDER BY attempt')
-        .all(j.id) as Array<{ attempt: number; http_status: number | null; duration_ms: number | null; at: number }>
-    ).map((a) => ({ n: a.attempt, http_status: a.http_status, duration_ms: a.duration_ms, at: a.at })),
+        .prepare('SELECT attempt, http_status, error, duration_ms, at FROM webhook_attempts WHERE job_id=? ORDER BY attempt')
+        .all(j.id) as Array<{ attempt: number; http_status: number | null; error: string | null; duration_ms: number | null; at: number }>
+    ).map((a) => ({ n: a.attempt, http_status: a.http_status, error: a.error, duration_ms: a.duration_ms, at: a.at })),
   }));
 
   return {
@@ -190,9 +250,20 @@ export function getLogEntry(wamid: string): LogEntry | null {
   return m ? toLogEntry(m) : null;
 }
 
-export function getLog(limit = 100): LogEntry[] {
+// Newest first: messages and rejected Meta requests interleaved by time.
+export function getLog(limit = 100): Array<LogEntry | RejectedLogEntry> {
   const rows = db
-    .prepare('SELECT * FROM messages ORDER BY created_at DESC LIMIT ?')
+    .prepare(`${SELECT_MESSAGE} ORDER BY m.created_at DESC LIMIT ?`)
     .all(limit) as StoredMessage[];
-  return rows.map(toLogEntry);
+  const rejected = (
+    db.prepare('SELECT * FROM rejected_requests ORDER BY at DESC LIMIT ?').all(limit) as Array<{
+      at: number; phone_number_id: string; http_status: number; code: number; subcode: number | null; forced: number; to_number: string | null; body: string | null;
+    }>
+  ).map(
+    (r): RejectedLogEntry => ({
+      wamid: null, time: r.at, direction: 'rejected', phone_number_id: r.phone_number_id, to: r.to_number, body: r.body,
+      http_status: r.http_status, code: r.code, subcode: r.subcode, forced: Boolean(r.forced),
+    }),
+  );
+  return [...rows.map(toLogEntry), ...rejected].sort((a, b) => b.time - a.time).slice(0, limit);
 }
