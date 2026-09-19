@@ -61,7 +61,9 @@ The fake Comdove prints `✔ 200 sent …`, `✔ 200 delivered …` and `✔ 200
 retries in `/api/log`.
 
 Against a real wat-backend, its local DB must know the same `phone_number_id`,
-`waba_id` and token (build plan §5c).
+`waba_id` and token (build plan §5c): run `npm run seed-comdove` (add `-- --dry-run` to
+preview). It reads the mock's numbers from `mock.sqlite` and writes them with wat-backend's
+own Prisma client and encryption; local databases only.
 
 ## Contract (shared with the UI team)
 

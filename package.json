@@ -12,7 +12,8 @@
     "test:watch": "node --import tsx --test --watch \"test/**/*.test.ts\"",
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "fake-comdove": "tsx tools/fake-comdove.ts",
-    "tab": "tsx tools/tab.ts"
+    "tab": "tsx tools/tab.ts",
+    "seed-comdove": "tsx tools/seed-comdove.ts"
   },
   "repository": {
     "type": "git",

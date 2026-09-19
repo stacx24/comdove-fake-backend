@@ -267,11 +267,17 @@ rm manual-test.sqlite*
   `META_APP_SECRET` = mock `APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` = mock
   `WEBHOOK_VERIFY_TOKEN`, `ALLOW_LOCAL_TEST=false`, `DB_TARGET=local`,
   `WABA_TOKEN_ENCRYPTION_KEY` set.
-- Comdove's **local** DB has a `WabaAccount` (`wabaId` = `MOCK-WABA-1`, token
-  `mock-token-dev` encrypted with its `encryptSecret`) and a `WabaPhoneNumber`
-  (`phoneNumberId` = `MOCK-PN-1`).
-- The mock (port 4020) has the same number registered (the `business-numbers` call from
-  Part 2 with `M=http://localhost:4020`) and a group `alpha` with the customer numbers.
+- The mock (port 4020) has the business number registered (the `business-numbers` call
+  from Part 2 with `M=http://localhost:4020`) and a group `alpha` with the customer numbers.
+- Comdove's **local** DB knows the same number and token. Copy them there with:
+  ```bash
+  npm run seed-comdove -- --dry-run   # shows what it will write
+  npm run seed-comdove                # upserts WabaAccount + WabaPhoneNumber, verifies the token
+  ```
+  It uses wat-backend's own Prisma client and `encryptSecret` (checkout at
+  `~/Projects/comdov-backend`, or set `COMDOVE_BACKEND_DIR`), picks the database from
+  wat-backend's `.env` (`DB_TARGET`), and refuses anything that is not localhost.
+  Re-run it whenever you register a new business number or change a token.
 
 | Step | Do this | Check |
 |---|---|---|
