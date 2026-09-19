@@ -2,8 +2,8 @@
 // when its group is claimed by an open /ws session AND its tile flag is on. Then an
 // outbound message is pushed as message.new and marked delivered (Person 1 fires the
 // webhook); otherwise it stays queued until the group is claimed again (deliverQueued)
-// or the tile comes back online (next step). Delivery also triggers Person 2's
-// auto-reply engine (FR-10, plan §14).
+// or the tile comes back online (flushTile, called by ws/group-events.ts). Delivery
+// also triggers Person 2's auto-reply engine (FR-10, plan §14).
 import type { Customer, Delivery, StoredMessage } from './ports.js';
 import type { Session } from '../ws/session.js';
 import type { SessionIndex } from '../ws/session-index.js';
