@@ -260,7 +260,8 @@ const { WebSocket } = await import("ws");
 const ws = new WebSocket("ws://localhost:4021/ws");
 ws.on("open", () => ws.send(JSON.stringify({ type: "admin.subscribe" })));
 ws.on("message", (d) => { const f = JSON.parse(String(d));
-  console.log("[admin]", f.type, f.entry ? `${f.entry.body} ${f.entry.status}` : f.groups ? f.groups.map(g => `${g.id}:${g.status}`).join(",") : ""); });'
+  const e = f.entry;
+  console.log("[admin]", f.type, e ? (e.direction === "rejected" ? `REJECTED ${e.http_status}/${e.code}` : `${e.body} ${e.status}`) : f.groups ? f.groups.map(g => `${g.id}:${g.status}`).join(",") : ""); });'
 ```
 ✅ At once: `[admin] groups.update alpha:locked` (Terminal 4 holds it) and `[admin] numbers.update`.
 
@@ -273,10 +274,20 @@ Then, with Terminal 5 open:
 3. `curl -s -X POST $M/api/presence -H 'Content-Type: application/json' -d '{"number":"919876543211","online":false}'; echo`
    ✅ `[admin] numbers.update` (the customer now shows `online:false`).
 4. `curl -s -X POST $M/api/webhook/verify; echo` ✅ `[admin] webhook.verify`.
+5. Send with a wrong token (Test 3a):
+   ```bash
+   curl -s -o /dev/null -X POST $M/v23.0/MOCK-PN-1/messages -H 'Authorization: Bearer WRONG' \
+     -H 'Content-Type: application/json' \
+     -d '{"messaging_product":"whatsapp","to":"919876543210","type":"text","text":{"body":"x"}}'
+   ```
+   ✅ At once: `[admin] log.entry REJECTED 401/190`. Every Test 3 error shows up the same way.
 
-The admin page loads older history itself with `GET $M/api/log`, and should update log rows
-by `wamid` for both `log.entry` and `log.update`. Rejected Meta requests (Test 3) show only
-in `GET /api/log`, not live.
+The admin page loads older history itself with `GET $M/api/log`. Live rows:
+- a **message** arrives as `log.entry` (first time) and changes as `log.update` — key these rows
+  by `wamid`;
+- a **rejected Meta request** arrives once as `log.entry` with `direction: "rejected"` and
+  **`wamid: null`** (`RejectedLogEntryDTO` in `src/contract/api-types.ts`), the same object
+  `GET /api/log` returns. It is never updated — always add it as a new row; do not key it by `wamid`.
 
 ### Test 15 — Reset with a tab open (demo step 10)
 Keep Terminals 4 and 5 open.
@@ -381,16 +392,14 @@ retry; after restoring the token the next send was `SENT`.
 | Offline tile queues; back online flushes + delivered | Test 6 |
 | Retries, timing and ordering | Test 7 |
 | Auto-reply | Test 8 |
-| Admin log incl. rejected requests | Test 9 |
+| Admin log incl. rejected requests | Tests 9, 14 |
 | Reset cancels retries, keeps numbers | Test 10 |
 | Tile opens chat → read webhooks + ticks | Test 12 |
 | Close / reopen group → queued, late delivered, read | Test 13 |
 | Verify handshake, lock shown in `/api/groups` | Test 1 |
-| Live admin feed (log, groups, numbers, verify) | Test 14 |
+| Live admin feed (log incl. rejected, groups, numbers, verify) | Test 14 |
 | Reset refreshes open tabs; wipe closes them (`group_deleted`) | Test 15 |
 | Everything with the real Comdove | Part 3 |
 | Demo step 9 — Comdove handles Meta's 401/190 | Part 4 |
 | All code paths | Part 1 (`npm test`) |
 
-**Not live yet (team decision):** rejected Meta requests appear only in `GET /api/log`; pushing
-them over the admin feed needs a `LogEntryDTO` contract change.
