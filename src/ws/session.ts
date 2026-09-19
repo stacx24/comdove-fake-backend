@@ -26,6 +26,10 @@ export interface SessionDeps {
   groups: GroupDirectory;
   /** Handlers for the 4 group events (later step). Default: ignore. */
   onGroupEvent?: (session: Session, ev: GroupEvent) => void;
+  /** Called after a successful claim, once group.claimed has been sent. */
+  onClaim?: (session: Session, groupId: string) => void;
+  /** Called when a session that held a group closes, after its lock is released. */
+  onRelease?: (session: Session, groupId: string) => void;
 }
 
 export type Role = { kind: 'none' } | { kind: 'group'; groupId: string } | { kind: 'admin' };
@@ -75,7 +79,10 @@ export function createSession(socket: SessionSocket, deps: SessionDeps): Session
     close() {
       if (closed) return;
       closed = true;
-      if (role.kind === 'group') deps.lock.release(role.groupId, session);
+      if (role.kind === 'group') {
+        deps.lock.release(role.groupId, session);
+        deps.onRelease?.(session, role.groupId);
+      }
     },
   };
 
@@ -93,6 +100,7 @@ export function createSession(socket: SessionSocket, deps: SessionDeps): Session
     }
     role = { kind: 'group', groupId };
     session.send({ type: 'group.claimed', ...deps.groups.snapshot(groupId) });
+    deps.onClaim?.(session, groupId);
   }
 
   return session;

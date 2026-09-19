@@ -133,3 +133,20 @@ test('close releases the lock once, and never a newer owner lock', () => {
   s.handle({ type: 'group.claim', group: 'nope' });
   assert.deepEqual(closedSocket.sent, []);
 });
+
+test('onClaim runs after a successful claim and onRelease on close; never for refused claims', () => {
+  const calls: string[] = [];
+  const { open } = setup({
+    onClaim: (s, g) => calls.push(`claim:${g}:${s.role.kind}`),
+    onRelease: (_s, g) => calls.push(`release:${g}`),
+  });
+  const first = open();
+  const second = open();
+  first.session.handle({ type: 'group.claim', group: 'alpha' });
+  assert.equal(first.socket.sent[0]?.type, 'group.claimed');
+  second.session.handle({ type: 'group.claim', group: 'alpha' }); // refused
+  second.session.close(); // held nothing
+  first.session.close();
+  first.session.close(); // idempotent
+  assert.deepEqual(calls, ['claim:alpha:group', 'release:alpha']);
+});
