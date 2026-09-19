@@ -1,6 +1,6 @@
 // Stored messages (Person 2's rows) → contract chat bubbles. Pure: no DB, no sockets.
-import type { MessageStatus, WsMessage } from '../contract/ws-events.js';
-import type { StoredMessage } from '../core/ports.js';
+import type { MessageStatus, RejectedLogEntry, WsMessage } from '../contract/ws-events.js';
+import type { RejectedRequest, StoredMessage } from '../core/ports.js';
 
 type Row = Pick<
   StoredMessage,
@@ -20,5 +20,21 @@ export function toWsMessage(m: Row): WsMessage {
     body: m.body,
     status: statusOf(m),
     created_at: m.created_at,
+  };
+}
+
+/** A rejected Meta request → the admin-log entry (same shape GET /api/log returns). */
+export function toRejectedLogEntry(r: RejectedRequest): RejectedLogEntry {
+  return {
+    wamid: null,
+    time: r.at,
+    direction: 'rejected',
+    phone_number_id: r.phone_number_id,
+    to: r.to ?? null,
+    body: r.body ?? null,
+    http_status: r.http_status,
+    code: r.code,
+    subcode: r.subcode ?? null,
+    forced: r.forced,
   };
 }

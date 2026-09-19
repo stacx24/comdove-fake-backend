@@ -1,7 +1,7 @@
 // POST /{version}/{phone_number_id}/messages — the endpoint Comdove calls instead of
 // graph.facebook.com (Tech Spec §3, build plan §7).
 import express, { type Router } from 'express';
-import type { Delivery, Registry } from '../core/ports.js';
+import type { Bus, Delivery, Registry, RejectedRequest } from '../core/ports.js';
 import type { Lifecycle } from '../core/lifecycle.js';
 import { validate } from './validate.js';
 import { READ_SUCCESS, sendSuccess } from './responses.js';
@@ -15,6 +15,8 @@ export interface MetaRouterDeps {
   registry: Registry;
   lifecycle: Lifecycle;
   delivery: Delivery;
+  /** Rejected requests are announced here (→ live admin feed). */
+  bus?: Bus;
   now?: () => number;
 }
 
@@ -38,7 +40,7 @@ export function createMetaRouter(d: MetaRouterDeps): Router {
     if (result.kind === 'error') {
       const { status, body } = result.error;
       const sent = (req.body ?? {}) as { to?: unknown; text?: { body?: unknown } };
-      d.registry.logRejected({
+      const rejected: RejectedRequest = {
         at: now(),
         phone_number_id: phoneNumberId,
         http_status: status,
@@ -47,7 +49,9 @@ export function createMetaRouter(d: MetaRouterDeps): Router {
         forced: result.forced,
         ...(typeof sent.to === 'string' && { to: sent.to }),
         ...(typeof sent.text?.body === 'string' && { body: sent.text.body }),
-      });
+      };
+      d.registry.logRejected(rejected);
+      d.bus?.emit({ type: 'log.rejected', request: rejected });
       res.status(status).json(body);
       return;
     }

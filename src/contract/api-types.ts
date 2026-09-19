@@ -54,6 +54,24 @@ export interface LogEntryDTO {
   }>;
 }
 
+// A Meta request the emulator rejected (plan §8c, §10c): never stored as a message, so
+// no wamid, and never updated. GET /api/log and the admin feed both carry these.
+export interface RejectedLogEntryDTO {
+  wamid: null;
+  time: number;
+  direction: 'rejected';
+  phone_number_id: string;
+  to: string | null;
+  body: string | null;
+  http_status: number;
+  code: number;
+  subcode: number | null;
+  forced: boolean;
+}
+
+/** One row of GET /api/log (newest first): a message, or a rejected Meta request. */
+export type LogItemDTO = LogEntryDTO | RejectedLogEntryDTO;
+
 // Request bodies
 export interface RegisterBusinessNumberBody {
   display_number: string;

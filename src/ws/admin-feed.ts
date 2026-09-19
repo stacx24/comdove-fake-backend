@@ -7,6 +7,7 @@ import type {
   CustomerListItem,
   GroupListItem,
   LogEntry,
+  RejectedLogEntry,
 } from '../contract/ws-events.js';
 import type { Session } from './session.js';
 
@@ -24,6 +25,8 @@ export interface AdminFeed {
   size(): number;
   /** A message or one of its webhooks changed: log.entry the first time, log.update after. */
   logChanged(wamid: string): void;
+  /** The Meta emulator rejected a request: one log.entry (direction 'rejected'), never updated. */
+  rejected(entry: RejectedLogEntry): void;
   groupsChanged(): void;
   numbersChanged(): void;
   /** A group was claimed or released: both lists show the claim status. */
@@ -69,6 +72,10 @@ export function createAdminFeed(d: AdminFeedDeps): AdminFeed {
       const type = announced.has(wamid) ? 'log.update' : 'log.entry';
       announced.add(wamid);
       broadcast({ type, entry });
+    },
+
+    rejected(entry) {
+      toAdmins(() => ({ type: 'log.entry', entry }));
     },
 
     groupsChanged: () => toAdmins(groupsEvent),

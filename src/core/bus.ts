@@ -4,14 +4,14 @@
 // to the admin feed.
 import type { Bus, BusEvent, Customer } from './ports.js';
 import type { SessionIndex } from '../ws/session-index.js';
-import { toWsMessage } from '../ws/wire.js';
+import { toRejectedLogEntry, toWsMessage } from '../ws/wire.js';
 import type { AdminFeed } from '../ws/admin-feed.js';
 
 export interface LiveBusDeps {
   sessions: SessionIndex;
   getCustomer(number: string): Customer | null;
   log?: (line: string) => void;
-  admin?: Pick<AdminFeed, 'logChanged' | 'verify'>;
+  admin?: Pick<AdminFeed, 'logChanged' | 'verify'> & Partial<Pick<AdminFeed, 'rejected'>>;
 }
 
 export function createLiveBus(d: LiveBusDeps): Bus {
@@ -46,6 +46,9 @@ export function createLiveBus(d: LiveBusDeps): Bus {
           return;
         case 'webhook.verify':
           d.admin?.verify({ ok: e.ok, at: e.at, detail: e.detail });
+          return;
+        case 'log.rejected':
+          d.admin?.rejected?.(toRejectedLogEntry(e.request));
           return;
       }
     },

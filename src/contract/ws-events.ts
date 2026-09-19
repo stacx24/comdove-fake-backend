@@ -8,6 +8,7 @@ import type {
   CustomerDTO,
   GroupSummaryDTO,
   LogEntryDTO,
+  RejectedLogEntryDTO,
 } from './api-types.js';
 
 // Shapes shared with the control API (/api/*) come from Person 2's api-types.ts,
@@ -19,6 +20,7 @@ export type BusinessNumber = BusinessNumberDTO;
 export type CustomerListItem = CustomerDTO;
 export type GroupListItem = GroupSummaryDTO;
 export type LogEntry = LogEntryDTO;
+export type RejectedLogEntry = RejectedLogEntryDTO;
 export type MessageStatus = 'sent' | 'delivered' | 'read';
 
 // ---------------------------------------------------------------------------
@@ -167,7 +169,8 @@ export type ServerEvent =
 // Server -> client (admin feed)
 // ---------------------------------------------------------------------------
 
-export type LogEntryEvent = { type: 'log.entry'; entry: LogEntry };
+// A rejected Meta request arrives once as a log.entry (direction 'rejected') and is never updated.
+export type LogEntryEvent = { type: 'log.entry'; entry: LogEntry | RejectedLogEntry };
 export type LogUpdateEvent = { type: 'log.update'; entry: LogEntry }; // replaces the entry with the same wamid
 export type LogResetEvent = { type: 'log.reset' };
 export type GroupsUpdateEvent = { type: 'groups.update'; groups: GroupListItem[] };

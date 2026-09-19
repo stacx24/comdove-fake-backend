@@ -156,3 +156,15 @@ test('reset sends log.reset then fresh lists, and the next change is a log.entry
   feed.logChanged('w1');
   assert.deepEqual(a.types(), ['log.entry']);
 });
+
+test('a rejected Meta request is broadcast as a log.entry (never updated later)', () => {
+  const { feed, lookups } = setup();
+  const a = fakeSession();
+  feed.subscribe(a.session);
+  const rejected = { wamid: null, time: 7, direction: 'rejected' as const, phone_number_id: 'PN-1', to: null, body: null, http_status: 400, code: 130429, subcode: null, forced: true };
+  feed.rejected(rejected);
+  assert.deepEqual(a.sent.at(-1), { type: 'log.entry', entry: rejected });
+  assert.deepEqual(lookups, []);
+  const idle = createAdminFeed({ getLogEntry: () => null, listGroups: () => [], listBusinessNumbers: () => [], listCustomers: () => [] });
+  idle.rejected(rejected); // no admins: nothing to do, no error
+});

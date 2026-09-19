@@ -46,7 +46,7 @@ export function createMetaFace(d: MetaFaceDeps): MetaFace {
   const lifecycle = createLifecycle({ registry: d.registry, bus: d.bus, dispatcher, statusDelayMs: d.statusDelayMs, now: d.dispatcher?.now });
 
   return {
-    router: createMetaRouter({ registry: d.registry, lifecycle, delivery: d.delivery }),
+    router: createMetaRouter({ registry: d.registry, lifecycle, delivery: d.delivery, bus: d.bus }),
     notImplemented: metaNotImplemented(),
     lifecycle,
     dispatcher,
