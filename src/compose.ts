@@ -75,6 +75,8 @@ export function composeServer(o: ComposeOptions = {}) {
   services.inbound = metaFace.lifecycle.inbound;
   services.cancelWebhooks = () => metaFace.dispatcher.cancelAll();
   services.verify = async () => (services.lastVerify = await metaFace.verify());
+  services.presence = live.groupEvents.setPresence;
+  services.autoReplyChanged = live.groupEvents.autoReplyChanged;
 
   const app = createApp({ metaFace, controlApi: controlApi() });
   return { app, metaFace, delivery, bus, live };
