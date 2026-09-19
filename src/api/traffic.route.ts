@@ -1,6 +1,8 @@
 import { Router, type Request, type Response } from 'express';
 import { getCustomer, getBusiness, setOnline } from '../core/registry.js';
 import { storeMessage, getLog } from '../core/messages.js';
+import { services } from '../core/services.js';
+import { LifecycleError } from '../core/lifecycle.js';
 import { fail } from './respond.js';
 
 export const trafficRouter = Router();
@@ -26,6 +28,15 @@ trafficRouter.post('/inject', (req: Request, res: Response) => {
   if (!getCustomer(String(from))) return fail(res, 400, 'from must be a registered customer');
   const biz = getBusiness(String(to));
   if (!biz) return fail(res, 400, 'to must be a registered business number');
+  // Wired: Person 1's lifecycle stores it AND fires the signed inbound webhook.
+  if (services.inbound) {
+    try {
+      return res.json({ wamid: services.inbound(String(from), biz.phone_number_id, String(body), 'inject').wamid });
+    } catch (err) {
+      if (err instanceof LifecycleError) return fail(res, 400, err.message);
+      throw err;
+    }
+  }
   const msg = storeMessage({
     from: String(from),
     to: biz.display_number,
@@ -33,7 +44,6 @@ trafficRouter.post('/inject', (req: Request, res: Response) => {
     direction: 'inbound',
     source: 'inject',
   });
-  // TODO(Person 1): lifecycle.inbound → enqueue + fire the signed inbound webhook
   return res.json({ wamid: msg.wamid });
 });
 

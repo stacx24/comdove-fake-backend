@@ -96,4 +96,18 @@ CREATE TABLE IF NOT EXISTS webhook_attempts (
   duration_ms  INTEGER,
   at           INTEGER NOT NULL
 );
+
+-- Meta requests the emulator rejected (errors + X-Mock-Force-Error), shown in the
+-- admin log as direction 'rejected' (plan §8c, §10c). Person 1 writes.
+CREATE TABLE IF NOT EXISTS rejected_requests (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  at               INTEGER NOT NULL,
+  phone_number_id  TEXT NOT NULL,
+  http_status      INTEGER NOT NULL,
+  code             INTEGER NOT NULL,
+  subcode          INTEGER,
+  forced           INTEGER NOT NULL DEFAULT 0,
+  to_number        TEXT,
+  body             TEXT
+);
 `;
