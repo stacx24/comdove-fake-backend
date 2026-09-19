@@ -4,6 +4,7 @@ import {
   listBusinessNumbers,
   deleteBusinessNumber,
   listCustomers,
+  InvalidInputError,
 } from '../core/registry.js';
 import { fail } from './respond.js';
 import { services } from '../core/services.js';
@@ -19,7 +20,8 @@ numbersRouter.post('/business-numbers', (req: Request, res: Response) => {
     services.adminChanged?.('numbers');
     return res.json(bn);
   } catch (err) {
-    return fail(res, 400, err instanceof Error ? err.message : 'could not register');
+    // Bad input is the caller's mistake (400); a duplicate or the 10-number limit is a conflict (409).
+    return fail(res, err instanceof InvalidInputError ? 400 : 409, err instanceof Error ? err.message : 'could not register');
   }
 });
 

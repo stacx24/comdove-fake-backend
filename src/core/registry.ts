@@ -64,21 +64,37 @@ export function registerBusinessNumber(input: {
   waba_id?: string;
   token?: string;
 }): BusinessNumber {
-  const count = (db.prepare('SELECT COUNT(*) AS n FROM business_numbers').get() as { n: number }).n;
-  if (count >= 10) throw new Error('at most 10 business numbers (PRD scale target)');
-
+  // Bad input first (400), then conflicts with what is already registered (409).
   const display_number = phoneNumber(input.display_number, 'display_number');
 
-  const phone_number_id = input.phone_number_id ?? `MOCK-PN-${count + 1}`;
+  const count = (db.prepare('SELECT COUNT(*) AS n FROM business_numbers').get() as { n: number }).n;
+  if (count >= 10) throw new Error('at most 10 business numbers (PRD scale target)');
+  if (getBusiness(display_number)?.display_number === display_number)
+    throw new Error(`display number ${display_number} is already registered`);
+  if (input.phone_number_id && db.prepare('SELECT 1 FROM business_numbers WHERE phone_number_id=?').get(input.phone_number_id))
+    throw new Error(`phone_number_id ${input.phone_number_id} is already registered`);
+  if (getCustomer(display_number)) throw new Error(`number ${display_number} is a customer in a group`);
+
+  const phone_number_id = input.phone_number_id ?? nextMockPhoneNumberId();
   const token = input.token ?? `mock-token-${randomUUID().slice(0, 12)}`;
   const waba_id = input.waba_id ?? 'MOCK-WABA-1';
+  const created_at = now();
 
   db.prepare(
     `INSERT INTO business_numbers (phone_number_id, display_number, label, token, waba_id, created_at)
      VALUES (?, ?, ?, ?, ?, ?)`,
-  ).run(phone_number_id, display_number, input.label ?? null, token, waba_id, now());
+  ).run(phone_number_id, display_number, input.label ?? null, token, waba_id, created_at);
 
-  return { phone_number_id, display_number, label: input.label ?? null, token, waba_id, created_at: now() };
+  return { phone_number_id, display_number, label: input.label ?? null, token, waba_id, created_at };
+}
+
+// MOCK-PN-<n> with n one above the highest in use, so an id freed by a delete is never
+// handed out again (Comdove may still have rows for it) and caller-supplied MOCK-PN ids are skipped.
+function nextMockPhoneNumberId(): string {
+  const ids = db.prepare("SELECT phone_number_id FROM business_numbers WHERE phone_number_id LIKE 'MOCK-PN-%'").all() as Array<{ phone_number_id: string }>;
+  const highest = Math.max(0, ...ids.map((r) => Number(r.phone_number_id.slice('MOCK-PN-'.length))).filter(Number.isInteger));
+  const deleted = (db.prepare("SELECT MAX(CAST(SUBSTR(phone_number_id, 9) AS INTEGER)) AS n FROM conversations WHERE phone_number_id LIKE 'MOCK-PN-%'").get() as { n: number | null }).n ?? 0;
+  return `MOCK-PN-${Math.max(highest, deleted) + 1}`;
 }
 
 export function listBusinessNumbers(): BusinessNumber[] {

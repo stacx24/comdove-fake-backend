@@ -9,9 +9,10 @@ are in `src/contract/api-types.ts` (HTTP) and `src/contract/ws-events.ts` (WebSo
 
 They are generated, not hand-written: `npm run fixtures` boots the app on an in-memory
 database with a fake Comdove, a browser tab and an admin page, runs one scripted session and
-saves every response. wamids (`wamid.MOCK-000…001`, …) and times (from `1758270000000`, one
-second apart, in the order they happened) are replaced by stable values, so regenerating
-gives the same files. `npm test` fails if the API's shape drifts from these files.
+saves every response. wamids (`wamid.MOCK-000…001`, …) are replaced by stable values; times
+are replaced by values from `1758270000000`, one second apart, in the order they happened
+(regenerating can shift a few of them by a second — they are illustrative). `npm test` fails if
+the API's shape or status codes drift from these files.
 
 ## Scenario
 Business numbers `918888800001` (Sales, `PN-1`) and `918888800002` (Support, generated ids);
@@ -24,7 +25,7 @@ keyword auto-reply answers; a wrong-token request is rejected; then deletes and 
 | File | Call | Shows |
 |---|---|---|
 | `business-numbers.post` | `POST /api/business-numbers` | register with Comdove's ids and token |
-| `business-numbers.post.generated-ids` | same | ids and token generated (`MOCK-PN-2`, `MOCK-WABA-1`) |
+| `business-numbers.post.generated-ids` | same | ids and token generated (`MOCK-PN-1`, `MOCK-WABA-1`) |
 | `business-numbers.post.400` | same | invalid number → `{error:{message}}` |
 | `business-numbers.get` | `GET /api/business-numbers` | inventory |
 | `business-numbers.delete` / `.404` | `DELETE /api/business-numbers/:id` | 204 / unknown id |

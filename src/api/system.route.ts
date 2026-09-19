@@ -3,6 +3,7 @@ import { db } from '../db/db.js';
 import { env } from '../config/env.js';
 import { resetAll } from '../core/registry.js';
 import { services } from '../core/services.js';
+import { fail } from './respond.js';
 
 export const systemRouter = Router();
 
@@ -12,7 +13,9 @@ function count(table: string): number {
 
 // 11. Reset — wipe messages/queues; keep numbers/groups unless keep_numbers=false (FR-12)
 function doReset(req: Request, res: Response) {
-  const keep = req.body?.keep_numbers !== false; // default true
+  const given = req.body?.keep_numbers;
+  if (given !== undefined && typeof given !== 'boolean') return fail(res, 400, 'keep_numbers must be true or false');
+  const keep = given !== false; // default true
   services.cancelWebhooks?.(); // stop in-flight retries BEFORE their rows are deleted
   resetAll(keep);
   services.afterReset?.(keep); // admins: log.reset + lists; open tabs: fresh snapshot or group_deleted

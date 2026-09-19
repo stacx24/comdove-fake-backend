@@ -45,8 +45,13 @@ test('saved fixtures match a fresh run of the real app (shape + status codes)', 
 test('every control-API row of TEAM-SPLIT has a fixture', () => {
   const saved = readSaved();
   const covered = new Set(Object.values(saved.api).map((f) => `${f.request.method} ${f.request.path.replace(/\?.*$/, '')}`));
+  const ok = (name: string, want: number) => assert.equal(saved.api[name]?.status, want, `${name} should be ${want}`);
+  ok('business-numbers.delete', 204); // the happy-path fixtures really are happy paths
+  ok('groups.delete', 204);
+  ok('business-numbers.post', 200);
+  ok('groups.post', 200);
   const rows = [
-    'POST /api/business-numbers', 'GET /api/business-numbers', 'DELETE /api/business-numbers/MOCK-PN-2',
+    'POST /api/business-numbers', 'GET /api/business-numbers', 'DELETE /api/business-numbers/MOCK-PN-1',
     'POST /api/groups', 'GET /api/groups', 'DELETE /api/groups/beta',
     'GET /api/customers', 'POST /api/presence', 'POST /api/inject', 'GET /api/log',
     'POST /api/reset', 'POST /reset',
