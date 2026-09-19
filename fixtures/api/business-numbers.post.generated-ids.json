@@ -1,0 +1,19 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/business-numbers",
+    "body": {
+      "display_number": "918888800002",
+      "label": "Support"
+    }
+  },
+  "status": 200,
+  "body": {
+    "phone_number_id": "MOCK-PN-2",
+    "display_number": "918888800002",
+    "label": "Support",
+    "token": "mock-token-3f9c2a1b7e4d",
+    "waba_id": "MOCK-WABA-1",
+    "created_at": 1758270001000
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/business-numbers",
+    "body": {
+      "display_number": "12"
+    }
+  },
+  "status": 400,
+  "body": {
+    "error": {
+      "message": "display_number \"12\" must be 8–15 digits"
+    }
+  }
+}

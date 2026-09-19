@@ -1,0 +1,18 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/groups",
+    "body": {
+      "name": "gamma",
+      "numbers": [
+        "919876543210"
+      ]
+    }
+  },
+  "status": 409,
+  "body": {
+    "error": {
+      "message": "number 919876543210 is already a customer in another group"
+    }
+  }
+}

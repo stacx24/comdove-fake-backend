@@ -1,0 +1,25 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/groups",
+    "body": {
+      "name": "alpha",
+      "numbers": [
+        "919876543210",
+        "+91 98765-43211"
+      ],
+      "labels": {
+        "919876543210": "Asha"
+      }
+    }
+  },
+  "status": 200,
+  "body": {
+    "id": "alpha",
+    "name": "alpha",
+    "numbers": [
+      "919876543210",
+      "919876543211"
+    ]
+  }
+}

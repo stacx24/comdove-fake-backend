@@ -1,0 +1,22 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/business-numbers",
+    "body": {
+      "display_number": "918888800001",
+      "label": "Sales",
+      "phone_number_id": "PN-1",
+      "waba_id": "WABA-1",
+      "token": "tok-1"
+    }
+  },
+  "status": 200,
+  "body": {
+    "phone_number_id": "PN-1",
+    "display_number": "918888800001",
+    "label": "Sales",
+    "token": "tok-1",
+    "waba_id": "WABA-1",
+    "created_at": 1758270000000
+  }
+}

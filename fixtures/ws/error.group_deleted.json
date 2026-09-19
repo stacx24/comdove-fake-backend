@@ -1,0 +1,5 @@
+{
+  "type": "error",
+  "code": "group_deleted",
+  "message": "group alpha was deleted by a reset"
+}

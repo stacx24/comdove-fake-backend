@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/presence",
+    "body": {
+      "number": "919876543211",
+      "online": false
+    }
+  },
+  "status": 200,
+  "body": {
+    "number": "919876543211",
+    "online": false,
+    "effective_online": false
+  }
+}

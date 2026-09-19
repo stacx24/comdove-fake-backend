@@ -1,0 +1,15 @@
+{
+  "type": "log.entry",
+  "entry": {
+    "wamid": null,
+    "time": 1758270027000,
+    "direction": "rejected",
+    "phone_number_id": "PN-1",
+    "to": "919876543210",
+    "body": "wrong token",
+    "http_status": 401,
+    "code": 190,
+    "subcode": null,
+    "forced": false
+  }
+}

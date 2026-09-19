@@ -1,0 +1,12 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/webhook/verify"
+  },
+  "status": 200,
+  "body": {
+    "ok": true,
+    "at": 1758270002000,
+    "detail": "challenge echoed"
+  }
+}

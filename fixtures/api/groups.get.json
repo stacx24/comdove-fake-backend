@@ -1,0 +1,23 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/groups"
+  },
+  "status": 200,
+  "body": [
+    {
+      "id": "alpha",
+      "name": "alpha",
+      "count": 2,
+      "status": "locked",
+      "locked_since": 1758270005000
+    },
+    {
+      "id": "beta",
+      "name": "beta",
+      "count": 1,
+      "status": "free",
+      "locked_since": null
+    }
+  ]
+}

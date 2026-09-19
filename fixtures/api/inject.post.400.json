@@ -1,0 +1,17 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/inject",
+    "body": {
+      "from": "911111111111",
+      "to": "918888800001",
+      "body": "x"
+    }
+  },
+  "status": 400,
+  "body": {
+    "error": {
+      "message": "from must be a registered customer"
+    }
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "type": "group.claimed",
+  "group": {
+    "id": "alpha",
+    "name": "alpha"
+  },
+  "business_numbers": [
+    {
+      "phone_number_id": "PN-1",
+      "display_number": "918888800001",
+      "label": "Sales"
+    },
+    {
+      "phone_number_id": "MOCK-PN-2",
+      "display_number": "918888800002",
+      "label": "Support"
+    }
+  ],
+  "tiles": [
+    {
+      "number": "919876543210",
+      "label": "Asha",
+      "online": true,
+      "auto_reply": {
+        "mode": "manual",
+        "delay_ms": 0,
+        "rules": []
+      },
+      "history": [],
+      "queued": [
+        {
+          "wamid": "wamid.MOCK-000000000000000000000007",
+          "peer": "918888800001",
+          "direction": "outbound",
+          "body": "Your order is packed",
+          "status": "sent",
+          "created_at": 1758270003000
+        }
+      ],
+      "unread": {}
+    },
+    {
+      "number": "919876543211",
+      "label": null,
+      "online": true,
+      "auto_reply": {
+        "mode": "manual",
+        "delay_ms": 0,
+        "rules": []
+      },
+      "history": [],
+      "queued": [],
+      "unread": {}
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "type": "log.entry",
+  "entry": {
+    "wamid": "wamid.MOCK-000000000000000000000006",
+    "time": 1758270008000,
+    "direction": "outbound",
+    "source": "api",
+    "from": "918888800001",
+    "to": "919876543210",
+    "business": {
+      "phone_number_id": "PN-1",
+      "label": "Sales"
+    },
+    "group_id": "alpha",
+    "body": "It ships tomorrow",
+    "status": "sent",
+    "timeline": [
+      {
+        "status": "sent",
+        "at": 1758270008000
+      }
+    ],
+    "webhooks": [
+      {
+        "kind": "sent",
+        "state": "pending",
+        "attempts": []
+      }
+    ]
+  }
+}

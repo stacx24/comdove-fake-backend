@@ -1,0 +1,12 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/nope"
+  },
+  "status": 404,
+  "body": {
+    "error": {
+      "message": "no such control API endpoint"
+    }
+  }
+}
