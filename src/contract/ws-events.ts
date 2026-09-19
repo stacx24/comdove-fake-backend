@@ -207,3 +207,110 @@ void _adminNamesMatch;
 export function encodeEvent(ev: ServerEvent | AdminEvent): string {
   return JSON.stringify(ev);
 }
+
+// ---------------------------------------------------------------------------
+// Parser for client -> server frames. Checks shape only; business rules
+// (group exists, number in group, tile online) belong to the handlers.
+// Never throws for bad input.
+// ---------------------------------------------------------------------------
+
+export type ParseResult =
+  | { ok: true; event: ClientEvent }
+  | { ok: false; error: { code: 'bad_json' | 'bad_request' | 'unknown_type'; message: string } };
+
+class FieldError extends Error {}
+
+type JsonObject = Record<string, unknown>;
+
+function isObject(v: unknown): v is JsonObject {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+function isClientEventType(t: string): t is ClientEventType {
+  return (CLIENT_EVENT_TYPES as readonly string[]).includes(t);
+}
+
+function nonEmptyString(o: JsonObject, key: string, path: string = key): string {
+  const v = o[key];
+  if (typeof v !== 'string' || v.trim() === '') {
+    throw new FieldError(`field '${path}' must be a non-empty string`);
+  }
+  return v;
+}
+
+function bool(o: JsonObject, key: string): boolean {
+  const v = o[key];
+  if (typeof v !== 'boolean') throw new FieldError(`field '${key}' must be boolean`);
+  return v;
+}
+
+function messageBody(o: JsonObject): string {
+  const v = nonEmptyString(o, 'body');
+  if (v.length > MAX_BODY_LENGTH) {
+    throw new FieldError(`field 'body' must be at most ${MAX_BODY_LENGTH} characters`);
+  }
+  return v;
+}
+
+function autoReply(o: JsonObject): AutoReply {
+  const mode = o.mode;
+  if (typeof mode !== 'string' || !(REPLY_MODES as readonly string[]).includes(mode)) {
+    throw new FieldError(`field 'mode' must be one of ${REPLY_MODES.join(', ')}`);
+  }
+  const delay = o.delay_ms;
+  if (typeof delay !== 'number' || !Number.isInteger(delay) || delay < 0 || delay > MAX_DELAY_MS) {
+    throw new FieldError(`field 'delay_ms' must be an integer from 0 to ${MAX_DELAY_MS}`);
+  }
+  if (!Array.isArray(o.rules)) throw new FieldError(`field 'rules' must be an array`);
+  const rules: AutoReplyRule[] = o.rules.map((r: unknown, i: number) => {
+    if (!isObject(r)) throw new FieldError(`field 'rules[${i}]' must be an object`);
+    return {
+      keyword: nonEmptyString(r, 'keyword', `rules[${i}].keyword`),
+      reply: nonEmptyString(r, 'reply', `rules[${i}].reply`),
+    };
+  });
+  return { mode: mode as ReplyMode, delay_ms: delay, rules };
+}
+
+// Builds a new event with only the known fields.
+function readEvent(type: ClientEventType, o: JsonObject): ClientEvent {
+  switch (type) {
+    case 'group.claim':
+      return { type, group: nonEmptyString(o, 'group') };
+    case 'message.send':
+      return { type, from: nonEmptyString(o, 'from'), to: nonEmptyString(o, 'to'), body: messageBody(o) };
+    case 'tile.presence':
+      return { type, number: nonEmptyString(o, 'number'), online: bool(o, 'online') };
+    case 'chat.read':
+      return { type, number: nonEmptyString(o, 'number'), peer: nonEmptyString(o, 'peer') };
+    case 'tile.autoreply':
+      return { type, number: nonEmptyString(o, 'number'), ...autoReply(o) };
+    case 'admin.subscribe':
+      return { type };
+  }
+}
+
+function fail(code: 'bad_json' | 'bad_request' | 'unknown_type', message: string): ParseResult {
+  return { ok: false, error: { code, message } };
+}
+
+export function parseClientEvent(raw: string | Buffer): ParseResult {
+  let data: unknown;
+  try {
+    data = JSON.parse(typeof raw === 'string' ? raw : raw.toString('utf8'));
+  } catch {
+    return fail('bad_json', 'frame is not valid JSON');
+  }
+  if (!isObject(data)) return fail('bad_json', 'frame must be a JSON object');
+
+  const type = data.type;
+  if (typeof type !== 'string') return fail('bad_request', 'missing field: type');
+  if (!isClientEventType(type)) return fail('unknown_type', `unknown type: ${type}`);
+
+  try {
+    return { ok: true, event: readEvent(type, data) };
+  } catch (err) {
+    if (err instanceof FieldError) return fail('bad_request', err.message);
+    throw err; // a bug in this file, not bad input
+  }
+}
