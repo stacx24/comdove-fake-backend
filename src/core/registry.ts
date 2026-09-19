@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { db, now } from '../db/db.js';
+import { sharedLock } from '../ws/shared-lock.js';
 
-// The session lock is owned by Person 3 (in-memory, ws/lock.ts). Until that lands,
-// Person 2 treats every group as free/unlocked. Person 3 replaces these two shims
-// with imports from ws/lock.ts at integration (checkpoint ①).
-const isLocked = (_groupId: string): boolean => false;
-const lockedSince = (_groupId: string): number | null => null;
+// The session lock is owned by Person 3 (in memory, ws/shared-lock.ts): the /ws
+// sessions take it; the registry only reads it.
+const isLocked = (groupId: string): boolean => sharedLock.isLocked(groupId);
+const lockedSince = (groupId: string): number | null => sharedLock.lockedSince(groupId);
 
 // ---------------------------------------------------------------------------
 // Types
