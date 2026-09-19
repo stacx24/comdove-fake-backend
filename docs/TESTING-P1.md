@@ -1,13 +1,20 @@
 # Testing Guide — Person 1 (Meta face)
 
-How to check everything Person 1 built: the Meta send endpoint, Meta errors, signed
-webhooks to Comdove, retries, and how it works with Person 2's store and control API.
+How to check everything Person 1 built — the Meta send endpoint, Meta errors, signed
+webhooks to Comdove, retries — and how it works with Person 2's store/control API and
+Person 3's WebSocket (live delivery, tile actions).
 
-Three levels:
+Four levels:
 
 1. **Automated tests** — 2 minutes, nothing else running.
 2. **Manual tests with a fake Comdove** — safe, never touches the real Comdove.
 3. **Live test with the real Comdove** (wat-backend).
+4. **Demo step 9 with the real Comdove** — bad token → Comdove handles Meta's error.
+
+> **Key rule (plan §13a):** a message is **delivered** only when the tile's group is
+> **open in a browser tab** (claimed over `/ws`) **and** the tile is online. With no tab
+> open, Comdove's messages stay queued (`sent` only) and are delivered when the group is
+> opened. `npm run tab -- alpha` opens a group from the terminal.
 
 ---
 
@@ -15,7 +22,7 @@ Three levels:
 
 ```bash
 cd ~/Projects/comdov-mock-backend
-npm test            # expect: # tests 130  # pass 130  # fail 0
+npm test            # expect: # tests 221  # pass 221  # fail 0
 npm run typecheck   # expect: no output (no errors)
 ```
 
@@ -25,8 +32,9 @@ One area at a time:
 |---|---|
 | Errors and request validation | `node --import tsx --test test/meta/*.test.ts` |
 | Signing, webhook sender, retries, handshake | `node --import tsx --test test/webhooks/*.test.ts` |
-| Message status tracking (lifecycle) + P2 store adapter | `node --import tsx --test test/core/*.test.ts` |
-| Full flow (Meta face + Person 2 store/API) | `node --import tsx --test test/e2e/*.test.ts` |
+| Lifecycle, P2 store adapter, P3 delivery/bus | `node --import tsx --test test/core/*.test.ts` |
+| Full flows (Meta face + store + WebSocket) | `node --import tsx --test test/e2e/*.test.ts` |
+| Tile actions → lifecycle (send, read, presence, auto-reply) | `node --import tsx --test test/e2e/live-events.e2e.test.ts` |
 
 Tests use an in-memory database; they never touch `mock.sqlite`.
 
@@ -34,7 +42,7 @@ Tests use an in-memory database; they never touch `mock.sqlite`.
 
 ## Part 2 — Manual tests with the fake Comdove
 
-Use **3 terminals**. This runs on port **4021** with its own database file, so it does
+Use **4 terminals**. This runs on port **4021** with its own database file, so it does
 not clash with a mock already running on 4020.
 
 **Terminal 1 — fake Comdove (receives the webhooks, prints one line per webhook)**
@@ -60,12 +68,22 @@ curl -s -X POST $M/api/groups -H 'Content-Type: application/json' \
   -d '{"name":"alpha","numbers":["919876543210","919876543211"]}'; echo
 ```
 
+**Terminal 4 — a browser tab on group `alpha`** (stand-in for the UI; keep it open)
+```bash
+cd ~/Projects/comdov-mock-backend
+PORT=4021 npm run tab -- alpha
+```
+✅ `group.claimed alpha: 919876543210(on, …) 919876543211(on, …)`. It prints every event
+the server pushes, and sends each JSON line you type (Tests 11–13).
+
 ### Test 1 — Health and handshake
 ```bash
 curl -s $M/health; echo
 curl -s $M/api/status; echo
+curl -s $M/api/groups; echo
 ```
-✅ `"status":"ok"` and `"verify":{"ok":true,...}`
+✅ `"status":"ok"`, `"verify":{"ok":true,...}`, and group `alpha` shows `"status":"locked"`
+(Terminal 4 holds it).
 
 ### Test 2 — Send a message (Meta success response)
 ```bash
@@ -74,6 +92,7 @@ curl -s -X POST $M/v23.0/MOCK-PN-1/messages \
   -d '{"messaging_product":"whatsapp","to":"919876543210","type":"text","text":{"body":"Hello"}}'; echo
 ```
 ✅ `{"messaging_product":"whatsapp","contacts":[...],"messages":[{"id":"wamid.MOCK-..."}]}`
+✅ Terminal 4: `message.new 919876543210 ⬅ "Hello"`, then `message.status … delivered`.
 ✅ Terminal 1: `✔ 200 sent` then `✔ 200 delivered` (the first status waits ~0.5 s by design).
 
 ### Test 3 — Meta error responses
@@ -113,14 +132,15 @@ curl -s -w ' [%{http_code}]\n' -X POST $M/v23.0/MOCK-PN-1/messages \
 ```
 ✅ None of these print anything in Terminal 1 (rejected requests send no webhook).
 
-### Test 4 — Customer reply (signed inbound webhook)
+### Test 4 — Customer reply via the control API (signed inbound webhook)
 ```bash
 curl -s -X POST $M/api/inject -H 'Content-Type: application/json' \
   -d '{"from":"919876543210","to":"918888800001","body":"How much?"}'; echo
 ```
-✅ `{"wamid":"wamid.MOCK-..."}` and Terminal 1: `✔ 200 inbound`
+✅ `{"wamid":"wamid.MOCK-..."}`, Terminal 1: `✔ 200 inbound`,
+Terminal 4: `message.new 919876543210 ➡ "How much?"`.
 
-### Test 5 — Mark as read (no webhook expected)
+### Test 5 — Mark as read by Comdove (no webhook expected)
 Step 1 saves the new message's id in `$W`; step 2 uses it. Run both in the same terminal.
 ```bash
 # 1. Customer sends a message; save its id
@@ -135,21 +155,27 @@ curl -s -X POST $M/v23.0/MOCK-PN-1/messages \
   -d "{\"messaging_product\":\"whatsapp\",\"status\":\"read\",\"message_id\":\"$W\"}"; echo
 ```
 ✅ `{"success":true}`. Terminal 1 shows `✔ 200 inbound` for step 1 and **nothing** for step 2
-(correct — Meta sends no webhook for a business's own read receipt).
+(correct — Meta sends no webhook for a business's own read receipt). Terminal 4 shows
+`message.status … read` for the customer's own bubble.
 
 ⚠️ Step 2 uses **double quotes** so `$W` is filled in. A `400` with
 `"message_id is not an inbound message for this phone number"` means the id was wrong:
-a placeholder, an empty `$W` (different terminal), or the id of a message Comdove *sent*
-(only customer messages can be marked read).
+a placeholder, an empty `$W` (different terminal), or the id of a message Comdove *sent*.
 
-### Test 6 — Offline tile queues the message
+### Test 6 — Offline tile: queued, then flushed when it comes back online
 ```bash
 curl -s -X POST $M/api/presence -H 'Content-Type: application/json' -d '{"number":"919876543211","online":false}'; echo
 curl -s -X POST $M/v23.0/MOCK-PN-1/messages \
   -H 'Authorization: Bearer mock-token-dev' -H 'Content-Type: application/json' \
   -d '{"messaging_product":"whatsapp","to":"919876543211","type":"text","text":{"body":"Are you there?"}}'; echo
 ```
-✅ Terminal 1 shows only `✔ 200 sent` — **no** `delivered` (the tile is offline).
+✅ Terminal 1 shows only `✔ 200 sent` — **no** `delivered`. Terminal 4 shows
+`tile.presence … online:false` and no new bubble.
+```bash
+curl -s -X POST $M/api/presence -H 'Content-Type: application/json' -d '{"number":"919876543211","online":true}'; echo
+```
+✅ Terminal 4: `queue.flush 919876543211: 1 message(s)`, then `message.status … delivered`.
+Terminal 1: `✔ 200 delivered`.
 
 ### Test 7 — Retries when Comdove fails
 ```bash
@@ -176,7 +202,9 @@ curl -s -X POST $M/v23.0/MOCK-PN-1/messages \
   -H 'Authorization: Bearer mock-token-dev' -H 'Content-Type: application/json' \
   -d '{"messaging_product":"whatsapp","to":"919876543210","type":"text","text":{"body":"Our price list"}}'; echo
 ```
-✅ Terminal 1: `sent`, `delivered`, then ~0.5 s later `✔ 200 inbound` (the bot's reply).
+✅ Terminal 4: `tile.autoreply … keyword`, the Comdove bubble, then ~0.5 s later
+`message.new 919876543210 ➡ "What is the price?"`.
+✅ Terminal 1: `sent`, `delivered`, then `✔ 200 inbound` (the bot's reply).
 
 ### Test 9 — Admin log
 ```bash
@@ -193,8 +221,38 @@ curl -s $M/api/business-numbers; echo     # expect: still 1 number
 ```
 ✅ Messages cleared, numbers and groups kept, pending retries cancelled.
 
+### Test 11 — A tile types a reply (demo step 7, over `/ws`)
+Type this line in **Terminal 4**:
+```json
+{"type":"message.send","from":"919876543210","to":"918888800001","body":"I want 2 units"}
+```
+✅ Terminal 4: `message.new 919876543210 ➡ "I want 2 units"` (the bubble echoed back).
+✅ Terminal 1: `✔ 200 inbound` — the signed inbound webhook Comdove would receive.
+
+### Test 12 — The tile opens the chat → read (demo step 3, last part)
+Send Comdove a message first (Test 2), then type in **Terminal 4**:
+```json
+{"type":"chat.read","number":"919876543210","peer":"918888800001"}
+```
+✅ Terminal 4: `message.status 919876543210 read …` for every delivered, unread message.
+✅ Terminal 1: `✔ 200 read` per message, after its `sent` and `delivered`.
+
+Errors to try (each prints an `error` frame in Terminal 4 and sends nothing):
+`{"type":"message.send","from":"919999999999","to":"918888800001","body":"x"}` →
+`number_not_in_group`; a `to` that is not a business → `unknown_business`; sending from a
+tile you switched off → `tile_offline`.
+
+### Test 13 — Close and reopen the group (demo step 5)
+1. Ctrl+C in Terminal 4 (the group is now closed; `curl -s $M/api/groups` shows `free`).
+2. Send 2 messages from Comdove (Test 2, twice). Terminal 1: `✔ 200 sent` only — no `delivered`.
+3. Reopen: `PORT=4021 npm run tab -- alpha` in Terminal 4.
+
+✅ `group.claimed` shows the 2 messages as `queued` on that tile, then
+`message.status … delivered` for each. Terminal 1: `✔ 200 delivered` twice, in send order.
+✅ Type the `chat.read` line from Test 12 → `read` for both.
+
 ### Clean up
-Ctrl+C in Terminals 1 and 2, then:
+Ctrl+C in Terminals 1, 2 and 4, then:
 ```bash
 rm manual-test.sqlite*
 ```
@@ -209,20 +267,63 @@ rm manual-test.sqlite*
   `META_APP_SECRET` = mock `APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` = mock
   `WEBHOOK_VERIFY_TOKEN`, `ALLOW_LOCAL_TEST=false`, `DB_TARGET=local`,
   `WABA_TOKEN_ENCRYPTION_KEY` set.
-- Comdove's **local** DB has a `WabaAccount` (`wabaId` = `MOCK-WABA-1`, token encrypted
-  with its `encryptSecret`) and a `WabaPhoneNumber` (`phoneNumberId` = `MOCK-PN-1`).
+- Comdove's **local** DB has a `WabaAccount` (`wabaId` = `MOCK-WABA-1`, token
+  `mock-token-dev` encrypted with its `encryptSecret`) and a `WabaPhoneNumber`
+  (`phoneNumberId` = `MOCK-PN-1`).
 - The mock (port 4020) has the same number registered (the `business-numbers` call from
-  Part 2 with `M=http://localhost:4020`) and a group containing the customer numbers.
+  Part 2 with `M=http://localhost:4020`) and a group `alpha` with the customer numbers.
 
 | Step | Do this | Check |
 |---|---|---|
 | 1 | `curl -s localhost:4020/api/status` | `"verify":{"ok":true}` |
-| 2 | `curl -s -X POST localhost:4020/api/inject -H 'Content-Type: application/json' -d '{"from":"919876543212","to":"918888800001","body":"Hi from customer 3"}'` | A new chat appears in the **Comdove inbox** (frontend http://localhost:5173) |
-| 3 | Reply to that chat **from the Comdove inbox** | The reply shows ✓✓ **Delivered** in Comdove |
-| 4 | `curl -s "localhost:4020/api/log?limit=3"` | The reply has `sent:ok` and `delivered:ok`, each HTTP 200 |
+| 2 | Open the group: `npm run tab -- alpha` (keep it open) | `group.claimed alpha: …` |
+| 3 | In the tab, type `{"type":"message.send","from":"919876543212","to":"918888800001","body":"Hi from customer 3"}` | A new chat appears in the **Comdove inbox** (frontend http://localhost:5173) |
+| 4 | Reply to that chat **from the Comdove inbox** | The tab shows the reply (`message.new … ⬅`) and `delivered`; Comdove shows ✓✓ **Delivered** |
+| 5 | In the tab, type `{"type":"chat.read","number":"919876543212","peer":"918888800001"}` | Comdove shows the reply as **Read** |
+| 6 | `curl -s "localhost:4020/api/log?limit=3"` | The reply has `sent:ok`, `delivered:ok`, `read:ok`, each HTTP 200 |
 
 Comdove's log should contain **no** `UNKNOWN_WAMID`, `UNKNOWN_PHONE_NUMBER`,
-`webhook.signature_invalid` or `MetaApiError`.
+`webhook.signature_invalid` or unexpected `MetaApiError`.
+
+---
+
+## Part 4 — Demo step 9 with the real Comdove (bad token)
+
+PRD §10: *"Trigger one error case (bad token) and show Comdove handling Meta's error JSON."*
+We make Comdove's token wrong **without touching Comdove's database**: the mock is told to
+accept a different token, so Comdove's stored `mock-token-dev` becomes the bad one (like
+an expired or rotated token). Needs a customer who messaged in the last 24 h (Part 3, step 3).
+
+```bash
+M=http://localhost:4020
+
+# 1. Rotate the token the mock accepts for MOCK-PN-1
+curl -s -X DELETE $M/api/business-numbers/MOCK-PN-1 -w '%{http_code}\n'      # 204
+curl -s -X POST $M/api/business-numbers -H 'Content-Type: application/json' \
+  -d '{"display_number":"918888800001","label":"Mock Business","phone_number_id":"MOCK-PN-1","waba_id":"MOCK-WABA-1","token":"rotated-token-demo9"}'; echo
+```
+
+2. **Reply to the customer from the Comdove inbox.**
+
+3. Check:
+
+| Where | Expected |
+|---|---|
+| Comdove inbox | The reply bubble shows **failed** |
+| Comdove DB (`WaMessage`) | `status: FAILED`, `errorCode: "META_190"`, `errorMessage` = Meta's envelope: `{status: 401, code: 190, type: "OAuthException", message: "Invalid OAuth access token - Cannot parse access token", fbtrace_id: "MOCK-trace-…"}`, `wamid: null` |
+| Comdove log | one `meta.api.call`, then `waba.metaGraph.sendTextMessage.failed` and `worker.outbound.job.failed` — **no retry** (4xx is unrecoverable) |
+| Mock log `curl -s "$M/api/log?limit=1"` | `"direction":"rejected"`, `"http_status":401`, `"code":190`, with the recipient and text |
+
+```bash
+# 4. Restore the real token
+curl -s -X DELETE $M/api/business-numbers/MOCK-PN-1 -w '%{http_code}\n'
+curl -s -X POST $M/api/business-numbers -H 'Content-Type: application/json' \
+  -d '{"display_number":"918888800001","label":"Mock Business","phone_number_id":"MOCK-PN-1","waba_id":"MOCK-WABA-1","token":"mock-token-dev"}'; echo
+```
+✅ The next reply from Comdove goes through again (`SENT`, a `wamid.MOCK-…`, no error).
+
+Verified on 2026-09-19 against the real wat-backend: FAILED / `META_190`, one attempt, no
+retry; after restoring the token the next send was `SENT`.
 
 ---
 
@@ -232,16 +333,19 @@ Comdove's log should contain **no** `UNKNOWN_WAMID`, `UNKNOWN_PHONE_NUMBER`,
 |---|---|
 | Send endpoint + Meta success response | Test 2 |
 | Meta errors (190, 100/33, 131026, 130429, not implemented, bad JSON) | Test 3 |
-| Customer reply → signed inbound webhook | Test 4 |
-| Mark-as-read | Test 5 |
-| Offline tile keeps the message queued | Test 6 |
+| Customer reply → signed inbound webhook (API / tile) | Tests 4, 11 |
+| Mark-as-read by Comdove | Test 5 |
+| Offline tile queues; back online flushes + delivered | Test 6 |
 | Retries, timing and ordering | Test 7 |
 | Auto-reply | Test 8 |
 | Admin log incl. rejected requests | Test 9 |
 | Reset cancels retries, keeps numbers | Test 10 |
-| Verify handshake | Test 1 |
+| Tile opens chat → read webhooks + ticks | Test 12 |
+| Close / reopen group → queued, late delivered, read | Test 13 |
+| Verify handshake, lock shown in `/api/groups` | Test 1 |
 | Everything with the real Comdove | Part 3 |
+| Demo step 9 — Comdove handles Meta's 401/190 | Part 4 |
 | All code paths | Part 1 (`npm test`) |
 
-**Not testable yet** (needs Person 3's WebSocket): `read` status from a tile opening a
-chat, and late `delivered` statuses when a closed group is reopened.
+**Not built yet (Person 3):** the admin live feed over `/ws` (`log.entry` / `log.update`,
+`groups.update`, `numbers.update`) and refreshing open tabs after a reset.
