@@ -1,0 +1,360 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/log?limit=100"
+  },
+  "status": 200,
+  "body": [
+    {
+      "wamid": null,
+      "time": 1758270027000,
+      "direction": "rejected",
+      "phone_number_id": "PN-1",
+      "to": "919876543210",
+      "body": "wrong token",
+      "http_status": 401,
+      "code": 190,
+      "subcode": null,
+      "forced": false
+    },
+    {
+      "wamid": "wamid.MOCK-000000000000000000000002",
+      "time": 1758270025000,
+      "direction": "inbound",
+      "source": "autoreply",
+      "from": "919876543210",
+      "to": "918888800001",
+      "business": {
+        "phone_number_id": "PN-1",
+        "label": "Sales"
+      },
+      "group_id": "alpha",
+      "body": "What is the price?",
+      "status": "sent",
+      "timeline": [],
+      "webhooks": [
+        {
+          "kind": "inbound",
+          "state": "ok",
+          "attempts": [
+            {
+              "n": 1,
+              "http_status": 200,
+              "error": null,
+              "duration_ms": 12,
+              "at": 1758270029000
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "wamid": "wamid.MOCK-000000000000000000000003",
+      "time": 1758270023000,
+      "direction": "outbound",
+      "source": "api",
+      "from": "918888800001",
+      "to": "919876543210",
+      "business": {
+        "phone_number_id": "PN-1",
+        "label": "Sales"
+      },
+      "group_id": "alpha",
+      "body": "Our price list is attached",
+      "status": "delivered",
+      "timeline": [
+        {
+          "status": "sent",
+          "at": 1758270023000
+        },
+        {
+          "status": "delivered",
+          "at": 1758270024000
+        }
+      ],
+      "webhooks": [
+        {
+          "kind": "sent",
+          "state": "ok",
+          "attempts": [
+            {
+              "n": 1,
+              "http_status": 200,
+              "error": null,
+              "duration_ms": 12,
+              "at": 1758270026000
+            }
+          ]
+        },
+        {
+          "kind": "delivered",
+          "state": "ok",
+          "attempts": [
+            {
+              "n": 1,
+              "http_status": 200,
+              "error": null,
+              "duration_ms": 12,
+              "at": 1758270028000
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "wamid": "wamid.MOCK-000000000000000000000004",
+      "time": 1758270018000,
+      "direction": "outbound",
+      "source": "api",
+      "from": "918888800001",
+      "to": "919876543211",
+      "business": {
+        "phone_number_id": "PN-1",
+        "label": "Sales"
+      },
+      "group_id": "alpha",
+      "body": "Are you there?",
+      "status": "delivered",
+      "timeline": [
+        {
+          "status": "sent",
+          "at": 1758270018000
+        },
+        {
+          "status": "delivered",
+          "at": 1758270021000
+        }
+      ],
+      "webhooks": [
+        {
+          "kind": "sent",
+          "state": "ok",
+          "attempts": [
+            {
+              "n": 1,
+              "http_status": 200,
+              "error": null,
+              "duration_ms": 12,
+              "at": 1758270020000
+            }
+          ]
+        },
+        {
+          "kind": "delivered",
+          "state": "ok",
+          "attempts": [
+            {
+              "n": 1,
+              "http_status": 200,
+              "error": null,
+              "duration_ms": 12,
+              "at": 1758270022000
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "wamid": "wamid.MOCK-000000000000000000000001",
+      "time": 1758270014000,
+      "direction": "inbound",
+      "source": "inject",
+      "from": "919876543210",
+      "to": "918888800001",
+      "business": {
+        "phone_number_id": "PN-1",
+        "label": "Sales"
+      },
+      "group_id": "alpha",
+      "body": "Can I pay cash?",
+      "status": "sent",
+      "timeline": [],
+      "webhooks": [
+        {
+          "kind": "inbound",
+          "state": "ok",
+          "attempts": [
+            {
+              "n": 1,
+              "http_status": 200,
+              "error": null,
+              "duration_ms": 12,
+              "at": 1758270019000
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "wamid": "wamid.MOCK-000000000000000000000005",
+      "time": 1758270012000,
+      "direction": "inbound",
+      "source": "tile",
+      "from": "919876543210",
+      "to": "918888800001",
+      "business": {
+        "phone_number_id": "PN-1",
+        "label": "Sales"
+      },
+      "group_id": "alpha",
+      "body": "Thanks! What time?",
+      "status": "sent",
+      "timeline": [],
+      "webhooks": [
+        {
+          "kind": "inbound",
+          "state": "ok",
+          "attempts": [
+            {
+              "n": 1,
+              "http_status": 200,
+              "error": null,
+              "duration_ms": 12,
+              "at": 1758270017000
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "wamid": "wamid.MOCK-000000000000000000000006",
+      "time": 1758270008000,
+      "direction": "outbound",
+      "source": "api",
+      "from": "918888800001",
+      "to": "919876543210",
+      "business": {
+        "phone_number_id": "PN-1",
+        "label": "Sales"
+      },
+      "group_id": "alpha",
+      "body": "It ships tomorrow",
+      "status": "read",
+      "timeline": [
+        {
+          "status": "sent",
+          "at": 1758270008000
+        },
+        {
+          "status": "delivered",
+          "at": 1758270009000
+        },
+        {
+          "status": "read",
+          "at": 1758270010000
+        }
+      ],
+      "webhooks": [
+        {
+          "kind": "sent",
+          "state": "ok",
+          "attempts": [
+            {
+              "n": 1,
+              "http_status": 200,
+              "error": null,
+              "duration_ms": 12,
+              "at": 1758270011000
+            }
+          ]
+        },
+        {
+          "kind": "delivered",
+          "state": "ok",
+          "attempts": [
+            {
+              "n": 1,
+              "http_status": 200,
+              "error": null,
+              "duration_ms": 12,
+              "at": 1758270013000
+            }
+          ]
+        },
+        {
+          "kind": "read",
+          "state": "ok",
+          "attempts": [
+            {
+              "n": 1,
+              "http_status": 200,
+              "error": null,
+              "duration_ms": 12,
+              "at": 1758270016000
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "wamid": "wamid.MOCK-000000000000000000000007",
+      "time": 1758270003000,
+      "direction": "outbound",
+      "source": "api",
+      "from": "918888800001",
+      "to": "919876543210",
+      "business": {
+        "phone_number_id": "PN-1",
+        "label": "Sales"
+      },
+      "group_id": "alpha",
+      "body": "Your order is packed",
+      "status": "read",
+      "timeline": [
+        {
+          "status": "sent",
+          "at": 1758270003000
+        },
+        {
+          "status": "delivered",
+          "at": 1758270006000
+        },
+        {
+          "status": "read",
+          "at": 1758270010000
+        }
+      ],
+      "webhooks": [
+        {
+          "kind": "sent",
+          "state": "ok",
+          "attempts": [
+            {
+              "n": 1,
+              "http_status": 200,
+              "error": null,
+              "duration_ms": 12,
+              "at": 1758270004000
+            }
+          ]
+        },
+        {
+          "kind": "delivered",
+          "state": "ok",
+          "attempts": [
+            {
+              "n": 1,
+              "http_status": 200,
+              "error": null,
+              "duration_ms": 12,
+              "at": 1758270007000
+            }
+          ]
+        },
+        {
+          "kind": "read",
+          "state": "ok",
+          "attempts": [
+            {
+              "n": 1,
+              "http_status": 200,
+              "error": null,
+              "duration_ms": 12,
+              "at": 1758270015000
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

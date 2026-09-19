@@ -1,0 +1,14 @@
+{
+  "type": "queue.flush",
+  "number": "919876543211",
+  "messages": [
+    {
+      "wamid": "wamid.MOCK-000000000000000000000004",
+      "peer": "918888800001",
+      "direction": "outbound",
+      "body": "Are you there?",
+      "status": "sent",
+      "created_at": 1758270018000
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/groups",
+    "body": {
+      "name": "gamma",
+      "numbers": [
+        "abc"
+      ]
+    }
+  },
+  "status": 400,
+  "body": {
+    "error": {
+      "message": "customer number \"abc\" must be 8–15 digits"
+    }
+  }
+}

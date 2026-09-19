@@ -1,0 +1,6 @@
+{
+  "type": "webhook.verify",
+  "ok": true,
+  "at": 1758270002000,
+  "detail": "challenge echoed"
+}

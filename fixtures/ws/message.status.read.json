@@ -1,0 +1,7 @@
+{
+  "type": "message.status",
+  "wamid": "wamid.MOCK-000000000000000000000006",
+  "number": "919876543210",
+  "status": "read",
+  "at": 1758270010000
+}

@@ -1,0 +1,27 @@
+{
+  "request": {
+    "method": "PUT",
+    "path": "/api/customers/919876543210/auto-reply",
+    "body": {
+      "mode": "keyword",
+      "delay_ms": 0,
+      "rules": [
+        {
+          "keyword": "price",
+          "reply": "What is the price?"
+        }
+      ]
+    }
+  },
+  "status": 200,
+  "body": {
+    "mode": "keyword",
+    "delay_ms": 0,
+    "rules": [
+      {
+        "keyword": "price",
+        "reply": "What is the price?"
+      }
+    ]
+  }
+}

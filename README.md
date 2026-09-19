@@ -67,6 +67,9 @@ own Prisma client and encryption; local databases only.
 
 ## Contract (shared with the UI team)
 
+Sample responses for every `/api` call and every WebSocket frame the UI receives are in
+`fixtures/` (see `fixtures/README.md`); regenerate them with `npm run fixtures`.
+
 The WebSocket and API shapes are frozen in `src/contract/`:
 
 - `src/contract/ws-events.ts` — every frame on `ws://localhost:4020/ws`

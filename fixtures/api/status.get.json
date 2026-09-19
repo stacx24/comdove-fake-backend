@@ -1,0 +1,23 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/status"
+  },
+  "status": 200,
+  "body": {
+    "uptime": 42,
+    "comdove_webhook_url": "http://localhost:3000/webhooks/whatsapp",
+    "verify": {
+      "ok": true,
+      "at": 1758270002000,
+      "detail": "challenge echoed"
+    },
+    "pending_webhooks": 0,
+    "counts": {
+      "business_numbers": 2,
+      "groups": 2,
+      "customers": 3,
+      "messages": 7
+    }
+  }
+}

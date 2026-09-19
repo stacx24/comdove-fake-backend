@@ -1,0 +1,39 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/customers"
+  },
+  "status": 200,
+  "body": [
+    {
+      "number": "919876543210",
+      "label": "Asha",
+      "group_id": "alpha",
+      "online": true,
+      "effective_online": true,
+      "claim_status": "locked",
+      "reply_mode": "manual",
+      "type": "customer"
+    },
+    {
+      "number": "919876543211",
+      "label": null,
+      "group_id": "alpha",
+      "online": true,
+      "effective_online": true,
+      "claim_status": "locked",
+      "reply_mode": "manual",
+      "type": "customer"
+    },
+    {
+      "number": "919876543220",
+      "label": null,
+      "group_id": "beta",
+      "online": true,
+      "effective_online": false,
+      "claim_status": "free",
+      "reply_mode": "manual",
+      "type": "customer"
+    }
+  ]
+}

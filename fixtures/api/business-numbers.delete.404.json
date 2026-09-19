@@ -1,0 +1,12 @@
+{
+  "request": {
+    "method": "DELETE",
+    "path": "/api/business-numbers/NOPE"
+  },
+  "status": 404,
+  "body": {
+    "error": {
+      "message": "no such business number"
+    }
+  }
+}

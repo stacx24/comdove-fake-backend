@@ -1,0 +1,12 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/reset",
+    "body": {}
+  },
+  "status": 200,
+  "body": {
+    "ok": true,
+    "kept_numbers": true
+  }
+}

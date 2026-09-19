@@ -1,0 +1,13 @@
+{
+  "type": "message.new",
+  "to": "919876543210",
+  "number": "919876543210",
+  "message": {
+    "wamid": "wamid.MOCK-000000000000000000000006",
+    "peer": "918888800001",
+    "direction": "outbound",
+    "body": "It ships tomorrow",
+    "status": "sent",
+    "created_at": 1758270008000
+  }
+}

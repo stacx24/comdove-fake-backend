@@ -1,0 +1,12 @@
+{
+  "request": {
+    "method": "DELETE",
+    "path": "/api/groups/alpha"
+  },
+  "status": 409,
+  "body": {
+    "error": {
+      "message": "group is claimed by an open session"
+    }
+  }
+}

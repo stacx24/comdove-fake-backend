@@ -1,0 +1,15 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/inject",
+    "body": {
+      "from": "919876543210",
+      "to": "918888800001",
+      "body": "Can I pay cash?"
+    }
+  },
+  "status": 200,
+  "body": {
+    "wamid": "wamid.MOCK-000000000000000000000001"
+  }
+}

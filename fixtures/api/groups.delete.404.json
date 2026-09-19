@@ -1,0 +1,12 @@
+{
+  "request": {
+    "method": "DELETE",
+    "path": "/api/groups/nope"
+  },
+  "status": 404,
+  "body": {
+    "error": {
+      "message": "no such group"
+    }
+  }
+}

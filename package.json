@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "fake-comdove": "tsx tools/fake-comdove.ts",
     "tab": "tsx tools/tab.ts",
-    "seed-comdove": "tsx tools/seed-comdove.ts"
+    "seed-comdove": "tsx tools/seed-comdove.ts",
+    "fixtures": "tsx tools/gen-fixtures.ts"
   },
   "repository": {
     "type": "git",
