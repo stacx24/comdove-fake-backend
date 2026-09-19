@@ -6,7 +6,7 @@ import {
   listCustomers,
 } from '../core/registry.js';
 import { fail } from './respond.js';
-// TODO(Person 3): emit numbers.update to the admin feed on changes (bus)
+import { services } from '../core/services.js';
 
 export const numbersRouter = Router();
 
@@ -16,6 +16,7 @@ numbersRouter.post('/business-numbers', (req: Request, res: Response) => {
   if (!display_number) return fail(res, 400, 'display_number is required');
   try {
     const bn = registerBusinessNumber({ display_number: String(display_number), label, phone_number_id, waba_id, token });
+    services.adminChanged?.('numbers');
     return res.json(bn);
   } catch (err) {
     return fail(res, 400, err instanceof Error ? err.message : 'could not register');
@@ -29,6 +30,7 @@ numbersRouter.get('/business-numbers', (_req: Request, res: Response) => res.jso
 numbersRouter.delete('/business-numbers/:phone_number_id', (req: Request, res: Response) => {
   const ok = deleteBusinessNumber(String(req.params.phone_number_id));
   if (!ok) return fail(res, 404, 'no such business number');
+  services.adminChanged?.('numbers');
   return res.status(204).end();
 });
 

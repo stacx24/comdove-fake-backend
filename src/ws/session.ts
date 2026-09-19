@@ -30,6 +30,10 @@ export interface SessionDeps {
   onClaim?: (session: Session, groupId: string) => void;
   /** Called when a session that held a group closes, after its lock is released. */
   onRelease?: (session: Session, groupId: string) => void;
+  /** Called when the socket becomes an admin feed (admin.subscribe). */
+  onAdminSubscribe?: (session: Session) => void;
+  /** Called when an admin-feed socket closes. */
+  onAdminClose?: (session: Session) => void;
 }
 
 export type Role = { kind: 'none' } | { kind: 'group'; groupId: string } | { kind: 'admin' };
@@ -37,6 +41,7 @@ export type Role = { kind: 'none' } | { kind: 'group'; groupId: string } | { kin
 export interface SessionSocket {
   send(data: string): void;
   readonly readyState: number;
+  close?(code?: number, reason?: string): void;
 }
 
 export interface Session {
@@ -45,6 +50,8 @@ export interface Session {
   handle(ev: ClientEvent): void;
   /** Socket closed: release the lock if this session holds one. Safe to call twice. */
   close(): void;
+  /** Server-initiated end (a reset wiped the group): release now, then close the socket. */
+  disconnect?(): void;
 }
 
 const OPEN = 1; // WebSocket.OPEN
@@ -69,6 +76,7 @@ export function createSession(socket: SessionSocket, deps: SessionDeps): Session
         case 'admin.subscribe':
           if (role.kind !== 'none') return error('already_claimed', 'this socket already has a role');
           role = { kind: 'admin' };
+          deps.onAdminSubscribe?.(session);
           return;
         default:
           if (role.kind !== 'group') return error('not_claimed', 'claim a group first');
@@ -82,7 +90,14 @@ export function createSession(socket: SessionSocket, deps: SessionDeps): Session
       if (role.kind === 'group') {
         deps.lock.release(role.groupId, session);
         deps.onRelease?.(session, role.groupId);
+      } else if (role.kind === 'admin') {
+        deps.onAdminClose?.(session);
       }
+    },
+
+    disconnect() {
+      session.close();
+      socket.close?.(4000, 'closed by server');
     },
   };
 

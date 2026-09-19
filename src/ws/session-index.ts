@@ -7,6 +7,8 @@ export interface SessionIndex {
   /** Removes only if `session` is the one stored for the group. */
   remove(groupId: string, session: Session): void;
   get(groupId: string): Session | undefined;
+  /** Every open group session, as a copy (safe to close sessions while iterating). */
+  all(): Array<[string, Session]>;
 }
 
 export function createSessionIndex(): SessionIndex {
@@ -19,5 +21,6 @@ export function createSessionIndex(): SessionIndex {
       if (byGroup.get(groupId) === session) byGroup.delete(groupId);
     },
     get: (groupId) => byGroup.get(groupId),
+    all: () => [...byGroup],
   };
 }

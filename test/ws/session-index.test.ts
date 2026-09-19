@@ -17,3 +17,15 @@ test('the index maps a group to its session and only that session can remove it'
   index.remove('alpha', a);
   assert.equal(index.get('alpha'), undefined);
 });
+
+test('all() lists every open group session', () => {
+  const index = createSessionIndex();
+  const a = fake();
+  const b = fake();
+  index.add('alpha', a);
+  index.add('beta', b);
+  assert.deepEqual(index.all(), [
+    ['alpha', a],
+    ['beta', b],
+  ]);
+});
