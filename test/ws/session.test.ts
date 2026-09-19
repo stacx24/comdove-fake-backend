@@ -150,3 +150,36 @@ test('onClaim runs after a successful claim and onRelease on close; never for re
   first.session.close(); // idempotent
   assert.deepEqual(calls, ['claim:alpha:group', 'release:alpha']);
 });
+
+test('admin hooks: onAdminSubscribe on subscribe, onAdminClose on close; group sockets never call them', () => {
+  const calls: string[] = [];
+  const { open } = setup({ onAdminSubscribe: () => calls.push('sub'), onAdminClose: () => calls.push('close') });
+  const admin = open();
+  const group = open();
+  admin.session.handle({ type: 'admin.subscribe' });
+  group.session.handle({ type: 'group.claim', group: 'alpha' });
+  group.session.close();
+  admin.session.close();
+  admin.session.close(); // idempotent
+  assert.deepEqual(calls, ['sub', 'close']);
+});
+
+test('disconnect releases the lock at once, then closes the socket', () => {
+  const { lock, groups } = setup();
+  const closes: Array<[number | undefined, string | undefined]> = [];
+  const socket = {
+    ...fakeSocket(),
+    close: (code?: number, reason?: string) => {
+      closes.push([code, reason]);
+    },
+  };
+  const released: string[] = [];
+  const s = createSession(socket, { lock, groups, onRelease: (_s, g) => released.push(g) });
+  s.handle({ type: 'group.claim', group: 'alpha' });
+  s.disconnect!();
+  assert.equal(lock.isLocked('alpha'), false);
+  assert.deepEqual(released, ['alpha']);
+  assert.deepEqual(closes, [[4000, 'closed by server']]);
+  s.close(); // the socket's own close event arrives later → no-op
+  assert.deepEqual(released, ['alpha']);
+});
