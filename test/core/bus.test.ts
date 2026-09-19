@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createLiveBus } from '../../src/core/bus.js';
+import { createLiveBus, type LiveBusDeps } from '../../src/core/bus.js';
 import { createSessionIndex } from '../../src/ws/session-index.js';
 import type { Session } from '../../src/ws/session.js';
 import type { Customer, StoredMessage } from '../../src/core/ports.js';
@@ -9,7 +9,7 @@ import type { AdminEvent, ServerEvent } from '../../src/contract/ws-events.js';
 const SALES = '918888800001';
 const T1 = '919876543210';
 
-function setup() {
+function setup(admin?: LiveBusDeps['admin']) {
   const customers: Record<string, Customer> = { [T1]: { number: T1, group_id: 'alpha', label: null, online: true } };
   const sessions = createSessionIndex();
   const sent: Array<ServerEvent | AdminEvent> = [];
@@ -22,7 +22,7 @@ function setup() {
     close: () => {},
   };
   const logs: string[] = [];
-  const bus = createLiveBus({ sessions, getCustomer: (n) => customers[n] ?? null, log: (l) => logs.push(l) });
+  const bus = createLiveBus({ sessions, getCustomer: (n) => customers[n] ?? null, log: (l) => logs.push(l), admin });
   return { bus, sessions, session, sent, logs };
 }
 
@@ -84,10 +84,26 @@ test('no open session, or an unknown customer, sends nothing', () => {
   assert.deepEqual(sent, []);
 });
 
-test('admin-feed events are ignored for now', () => {
-  const { bus, sessions, session, sent } = setup();
+test('log.changed and webhook.verify go to the admin feed, not to tiles', () => {
+  const calls: unknown[] = [];
+  const { bus, sessions, session, sent } = setup({
+    logChanged: (wamid) => calls.push(['log', wamid]),
+    verify: (r) => calls.push(['verify', r]),
+  });
   sessions.add('alpha', session);
   bus.emit({ type: 'log.changed', wamid: 'w1' });
   bus.emit({ type: 'webhook.verify', ok: true, at: 1, detail: 'ok' });
+  assert.deepEqual(calls, [
+    ['log', 'w1'],
+    ['verify', { ok: true, at: 1, detail: 'ok' }],
+  ]);
+  assert.deepEqual(sent, []);
+});
+
+test('without an admin feed, admin events are dropped quietly', () => {
+  const { bus, sessions, session, sent } = setup();
+  sessions.add('alpha', session);
+  bus.emit({ type: 'log.changed', wamid: 'w1' });
+  bus.emit({ type: 'webhook.verify', ok: false, at: 1, detail: 'down' });
   assert.deepEqual(sent, []);
 });

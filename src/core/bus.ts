@@ -1,15 +1,17 @@
-// Person 3's Bus (Person 1's port): turns lifecycle and dispatcher events into /ws frames
-// for the session that holds the tile's group. Outbound bubbles are pushed by delivery;
-// the bus shows inbound bubbles and status ticks. Admin-feed events (log.changed,
-// webhook.verify) are ignored until the admin feed lands (next step).
+// Person 3's Bus (Person 1's port): turns lifecycle and dispatcher events into /ws frames.
+// Tiles: inbound bubbles and status ticks for the session that holds the tile's group
+// (outbound bubbles are pushed by delivery). Admins: log.changed and webhook.verify go
+// to the admin feed.
 import type { Bus, BusEvent, Customer } from './ports.js';
 import type { SessionIndex } from '../ws/session-index.js';
 import { toWsMessage } from '../ws/wire.js';
+import type { AdminFeed } from '../ws/admin-feed.js';
 
 export interface LiveBusDeps {
   sessions: SessionIndex;
   getCustomer(number: string): Customer | null;
   log?: (line: string) => void;
+  admin?: Pick<AdminFeed, 'logChanged' | 'verify'>;
 }
 
 export function createLiveBus(d: LiveBusDeps): Bus {
@@ -39,8 +41,12 @@ export function createLiveBus(d: LiveBusDeps): Bus {
           log(`[bus] ${e.status.padEnd(9)} ${e.wamid} → ${e.number}`);
           sessionFor(e.number)?.send({ type: 'message.status', wamid: e.wamid, number: e.number, status: e.status, at: e.at });
           return;
-        default:
-          return; // log.changed, webhook.verify → admin feed (next step)
+        case 'log.changed':
+          d.admin?.logChanged(e.wamid);
+          return;
+        case 'webhook.verify':
+          d.admin?.verify({ ok: e.ok, at: e.at, detail: e.detail });
+          return;
       }
     },
   };
