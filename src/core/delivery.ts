@@ -28,6 +28,8 @@ export interface LiveDelivery extends Delivery {
   isOnline(number: string): boolean;
   /** After a claim: mark every online tile's queue delivered (no message.new — it is in the snapshot). */
   deliverQueued(groupId: string): void;
+  /** A tile came back online: push its queue as one queue.flush, then mark it delivered. */
+  flushTile(number: string): StoredMessage[];
 }
 
 export function createLiveDelivery(d: LiveDeliveryDeps): LiveDelivery {
@@ -77,6 +79,17 @@ export function createLiveDelivery(d: LiveDeliveryDeps): LiveDelivery {
         d.delivered(msgs);
         msgs.forEach(autoReply);
       }
+    },
+
+    flushTile(number) {
+      const session = sessionFor(number);
+      if (!session) return [];
+      const msgs = d.queuedFor(number);
+      if (msgs.length === 0) return [];
+      session.send({ type: 'queue.flush', number, messages: msgs.map(toWsMessage) });
+      d.delivered(msgs);
+      msgs.forEach(autoReply);
+      return msgs;
     },
   };
 }

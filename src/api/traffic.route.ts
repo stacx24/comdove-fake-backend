@@ -15,8 +15,13 @@ trafficRouter.post('/presence', (req: Request, res: Response) => {
   if (!number) return fail(res, 400, 'number is required');
   const c = getCustomer(String(number));
   if (!c) return fail(res, 404, 'no such customer');
+  // Wired: same effect as the tile toggle — push tile.presence and, going online,
+  // flush the queue with delivered webhooks. effective = group open AND flag on.
+  if (services.presence) {
+    const effective = services.presence(c.number, Boolean(online));
+    return res.json({ number: c.number, online: Boolean(online), effective_online: effective });
+  }
   setOnline(String(number), Boolean(online));
-  // TODO(Person 3): delivery.setPresence — push tile.presence + flush queue if online
   return res.json({ number: c.number, online: Boolean(online), effective_online: Boolean(online) });
 });
 

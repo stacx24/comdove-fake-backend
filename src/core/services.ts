@@ -18,6 +18,10 @@ export interface Services {
   verify?: () => Promise<HandshakeStatus>;
   /** Last handshake result — /api/status. */
   lastVerify?: HandshakeStatus;
+  /** P3 live engine — tile presence with its live effect (tile.presence, queue.flush + delivered). Returns effective online. */
+  presence?: (number: string, online: boolean) => boolean;
+  /** P3 live engine — show a changed auto-reply config in the open tile. */
+  autoReplyChanged?: (number: string, ar: { mode: 'manual' | 'echo' | 'keyword'; delay_ms: number; rules: Array<{ keyword: string; reply: string }> }) => void;
 }
 
 export const services: Services = {};

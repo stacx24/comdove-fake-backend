@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { getAutoReply, setAutoReply, type AutoReply } from '../core/registry.js';
 import { fail } from './respond.js';
-// TODO(Person 3): emit tile.autoreply to the open group session on change (bus)
+import { services } from '../core/services.js';
 
 export const autoReplyRouter = Router();
 
@@ -21,6 +21,7 @@ autoReplyRouter.put('/customers/:number/auto-reply', (req: Request, res: Respons
   const number = String(req.params.number);
   try {
     const saved = setAutoReply(number, ar);
+    services.autoReplyChanged?.(number, saved); // show it in the open tile
     return res.json(saved);
   } catch (err) {
     return fail(res, 404, err instanceof Error ? err.message : 'could not set auto-reply');
