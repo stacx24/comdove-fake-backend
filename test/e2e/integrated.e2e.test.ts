@@ -2,7 +2,9 @@
 // control API, P1's Meta face and SqliteJobStore — against a fake Comdove that
 // verifies signatures like wat-backend. Driven entirely over HTTP.
 import '../helpers/memory-db.js';
-import { test, before, after, beforeEach } from 'node:test';
+import { test, before, after, beforeEach, afterEach } from 'node:test';
+import { WebSocket } from 'ws';
+import { sharedLock } from '../../src/ws/shared-lock.js';
 import assert from 'node:assert/strict';
 import { composeServer } from '../../src/compose.js';
 import { createFakeComdove } from '../../tools/fake-comdove-app.js';
@@ -23,8 +25,9 @@ before(async () => {
     log: () => {},
   });
   const m = await listen(composed.app);
+  const wss = composed.live.attach(m.server, { heartbeatMs: 60_000 });
   base = m.base;
-  closeAll = async () => { composed.metaFace.dispatcher.cancelAll(); await m.close(); await c.close(); };
+  closeAll = async () => { composed.metaFace.dispatcher.cancelAll(); await wss.close(); await m.close(); await c.close(); };
 });
 after(() => closeAll());
 
@@ -42,7 +45,30 @@ beforeEach(async () => {
   comdove.received.length = 0;
   assert.equal((await api('POST', '/api/business-numbers', { display_number: '918888800001', label: 'Sales', phone_number_id: 'PN-1', waba_id: 'WABA-1', token: 'tok-1' })).status, 200);
   assert.equal((await api('POST', '/api/groups', { name: 'alpha', numbers: ['919876543210', '919876543211'] })).status, 200);
+  tab = await openGroup('alpha');
 });
+
+afterEach(async () => {
+  tab?.close();
+  tab = undefined;
+  await waitFor(() => !sharedLock.isLocked('alpha'));
+});
+
+// Delivery needs an open group (P3, plan §13a): a browser tab claims `alpha` for each test.
+let tab: WebSocket | undefined;
+async function openGroup(group: string): Promise<WebSocket> {
+  const ws = new WebSocket(base.replace('http', 'ws') + '/ws');
+  await new Promise((resolve, reject) => {
+    ws.once('open', resolve);
+    ws.once('error', reject);
+  });
+  const claimed = new Promise<void>((resolve, reject) =>
+    ws.once('message', (data) => (JSON.parse(String(data)).type === 'group.claimed' ? resolve() : reject(new Error(String(data))))),
+  );
+  ws.send(JSON.stringify({ type: 'group.claim', group }));
+  await claimed;
+  return ws;
+}
 
 test('handshake via /api/webhook/verify, reflected in /api/status', async () => {
   assert.equal((await api('POST', '/api/webhook/verify')).json.ok, true);

@@ -1,12 +1,9 @@
 import { env } from './config/env.js';
 import { composeServer } from './compose.js';
 import { services } from './core/services.js';
-import { createLockTable } from './ws/lock.js';
-import { attachWsServer } from './ws/server.js';
-import { createMemoryGroups, DEV_GROUPS } from './dev/dev-groups.js';
 
-// P2 store + control API (Swagger at /docs) + P1 Meta face + P3 WebSocket (/ws).
-const { app, metaFace } = composeServer();
+// P2 store + control API (Swagger at /docs) + P1 Meta face + P3 live engine (/ws).
+const { app, metaFace, live } = composeServer();
 
 const server = app.listen(env.PORT, () => {
   console.log(`🟢 comdove-fake-backend listening on http://localhost:${env.PORT}  (API docs: /docs)`);
@@ -18,10 +15,5 @@ const server = app.listen(env.PORT, () => {
   );
 });
 
-// WebSocket: group sessions + lock + heartbeat. Still on in-memory groups `alpha` and
-// `beta` until P3 plugs P2's store in behind GroupDirectory (checkpoint ①).
-attachWsServer(server, {
-  lock: createLockTable(),
-  groups: createMemoryGroups(DEV_GROUPS),
-  heartbeatMs: env.WS_HEARTBEAT_MS,
-});
+// /ws: group sessions on P2's store, the shared lock, heartbeat and live delivery.
+live.attach(server, { heartbeatMs: env.WS_HEARTBEAT_MS });

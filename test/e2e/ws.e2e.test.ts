@@ -49,6 +49,19 @@ async function startApp(env: Record<string, string> = {}) {
   child.stderr.on('data', (d) => (output += d));
   await waitFor(() => output.includes('WebSocket on') || child.exitCode !== null, 15000, () => `app start:\n${output}`);
   if (child.exitCode !== null) throw new Error(`app exited early:\n${output}`);
+
+  // Groups live in P2's store now: seed the two groups the tests expect.
+  const post = async (path: string, body: unknown) => {
+    const res = await fetch(`http://127.0.0.1:${port}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (res.status !== 200) throw new Error(`${path} → ${res.status} ${await res.text()}`);
+  };
+  await post('/api/business-numbers', { display_number: '918888800001', label: 'Sales' });
+  await post('/api/groups', { name: 'Alpha', numbers: DEV_GROUPS.alpha?.tiles });
+  await post('/api/groups', { name: 'Beta', numbers: DEV_GROUPS.beta?.tiles });
   return {
     http: `http://127.0.0.1:${port}`,
     ws: `ws://127.0.0.1:${port}/ws`,
