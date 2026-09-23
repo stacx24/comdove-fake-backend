@@ -7,6 +7,10 @@ import { fail } from './respond.js';
 
 export const trafficRouter = Router();
 
+/** GET /api/log?limit= — default, and the ceiling a 500-message run must not exceed. */
+export const DEFAULT_LOG_LIMIT = 100;
+export const MAX_LOG_LIMIT = 1000;
+
 // 8. Set a tile online/offline (FR-05, FR-13).
 // Person 2 persists the flag. Person 3 wires the live effect (push tile.presence,
 // flush the queue with delivered webhooks) at integration.
@@ -57,6 +61,8 @@ trafficRouter.post('/inject', (req: Request, res: Response) => {
 // 10. Admin live log (FR-11). Person 2 serves the data (pull); Person 3 adds the
 // live push (admin feed) at integration.
 trafficRouter.get('/log', (req: Request, res: Response) => {
-  const limit = Number(req.query.limit ?? 100);
-  return res.json(getLog(Number.isFinite(limit) ? limit : 100));
+  const raw = Number(req.query.limit ?? DEFAULT_LOG_LIMIT);
+  // Clamp: a 500-message run makes an unbounded (or negative → "no LIMIT") read expensive.
+  const limit = Number.isFinite(raw) ? Math.min(Math.max(Math.trunc(raw), 1), MAX_LOG_LIMIT) : DEFAULT_LOG_LIMIT;
+  return res.json(getLog(limit));
 });

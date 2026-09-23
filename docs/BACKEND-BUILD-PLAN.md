@@ -53,7 +53,7 @@ Packages to add: `ws`, `better-sqlite3`, `@types/ws`, `@types/better-sqlite3`.
 |----|-----------|------------------------|
 | **C1** | Meta API emulator | `POST /{version}/{phone_number_id}/messages` (text + mark-as-read); validate token, payload, recipient; return Meta success/error JSON; error injection; loud failure for everything else (§7–§8) |
 | **C2** | Webhook dispatcher | Post inbound + status (sent/delivered/read) to Comdove in Meta's envelope, signed, **ordered per conversation**, retried; verify handshake; late statuses on group reconnect (§9) |
-| **C3** | Registry, groups + presence | SQLite store for business numbers, groups (≤10 customers), per-tile online flags, offline queues, auto-reply rules; in-memory session lock; the WebSocket server (§6, §11, §13) |
+| **C3** | Registry, groups + presence | SQLite store for business numbers, groups (≤100 customers), per-tile online flags, offline queues, auto-reply rules; in-memory session lock; the WebSocket server (§6, §11, §13) |
 | **C4** | Client grid (browser) | **UI team.** Backend supplies the WebSocket contract (§11) |
 | **C5** | Admin UI + control API | **Backend:** `/api/*` endpoints + live admin feed (§10, §12). **UI team:** the `/admin` page |
 | **—** | Auto-reply engine **[Gap]** | Server-side echo / keyword map with delay (FR-10). The PDFs only put the setting on the tile; §14 decides where it runs |
@@ -625,7 +625,8 @@ also emits the matching admin-feed event (§12).
 ### 10c. Details
 
 - **Validation:** numbers are digits only after normalization, 8–15 digits.
-  Business numbers: max **10** (PRD scale target). Group: 1–10 numbers, a number
+  Business numbers: max **10** (PRD scale target). Group: 1–100 numbers (WS-343
+  raised this from 10 so one business can message 100 tiles), a number
   may not already be a customer in another group or a business number (409).
   Group `id` = slug of `name` (lowercase, `a-z0-9-`); it is the `?group=` value
   (FR-14).

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { MAX_GROUP_SIZE } from '../contract/api-types.js';
 import { db, now } from '../db/db.js';
 import { sharedLock } from '../ws/shared-lock.js';
 
@@ -128,7 +129,9 @@ export function createGroup(
   numbers: string[],
   labels?: Record<string, string>,
 ): { id: string; name: string; numbers: string[] } {
-  if (numbers.length < 1 || numbers.length > 10) throw new Error('a group needs 1–10 numbers');
+  if (numbers.length < 1 || numbers.length > MAX_GROUP_SIZE) {
+    throw new Error(`a group needs 1–${MAX_GROUP_SIZE} numbers`);
+  }
   const id = slugify(name);
   if (!id) throw new Error('group name must contain letters or digits');
 
@@ -142,11 +145,13 @@ export function createGroup(
 
   const tx = db.transaction(() => {
     db.prepare('INSERT INTO groups (id, name, created_at) VALUES (?, ?, ?)').run(id, name, now());
+    // One prepared statement for the whole group: 100 tiles are one transaction.
+    const insertCustomer = db.prepare(
+      `INSERT INTO customers (number, group_id, position, label, online, created_at)
+       VALUES (?, ?, ?, ?, 1, ?)`,
+    );
     clean.forEach((num, i) => {
-      db.prepare(
-        `INSERT INTO customers (number, group_id, position, label, online, created_at)
-         VALUES (?, ?, ?, ?, 1, ?)`,
-      ).run(num, id, i, labels?.[num] ?? null, now());
+      insertCustomer.run(num, id, i, labels?.[num] ?? null, now());
     });
   });
   tx();

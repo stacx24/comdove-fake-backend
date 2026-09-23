@@ -32,6 +32,9 @@ export const env = {
   STATUS_WEBHOOK_DELAY_MS: num('STATUS_WEBHOOK_DELAY_MS', 500),
   // WebSocket heartbeat: ping every N ms; a client that misses a pong is dropped (FR-16).
   WS_HEARTBEAT_MS: num('WS_HEARTBEAT_MS', 15000),
+  // Conversations that may have a webhook in flight at once. 5 businesses x 100 tiles is
+  // 500 conversations; uncapped, every one of them would call Comdove at the same instant.
+  WEBHOOK_MAX_PARALLEL: num('WEBHOOK_MAX_PARALLEL', 20),
 };
 
 export type Env = typeof env;

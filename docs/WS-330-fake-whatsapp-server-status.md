@@ -77,7 +77,7 @@ server). **79 `data-testid`** usages (build-constraint met). Sample-data mode fo
 | FR-12 | Reset (keep numbers/groups) | ✅ | `POST /api/reset` |
 | FR-13 | Control API (register/group/presence/inject) | ✅ | `/api/*` |
 | FR-14 | URL-addressable groups | ✅ | `/client?group=` + slug |
-| FR-15 | Groups of ≤10 customers | ✅ | `POST /api/groups` |
+| FR-15 | Groups of ≤100 customers (WS-343; was 10) | ✅ | `POST /api/groups` |
 | FR-16 | One session per group (lock) | ✅ | in-memory lock + 15s heartbeat |
 | FR-17 | Reopen restores history + queued | ✅ | snapshot on claim |
 | FR-18 | Late statuses on reconnect | ✅ | flush + status on reconnect |

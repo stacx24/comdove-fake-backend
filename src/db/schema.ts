@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS keyword_replies (
   keyword          TEXT NOT NULL,            -- case-insensitive "contains"
   reply            TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_keywords_customer ON keyword_replies(customer_number, position);
 
 -- Pair of numbers; next_seq gives per-conversation ordering (Spec §5 / PRD §6)
 CREATE TABLE IF NOT EXISTS conversations (
@@ -53,6 +54,9 @@ CREATE TABLE IF NOT EXISTS conversations (
   next_seq         INTEGER NOT NULL DEFAULT 1,
   UNIQUE (phone_number_id, customer_number)
 );
+-- A tile shows every business it talks to, so history/queue look up by customer
+-- alone; the UNIQUE index above starts with phone_number_id and cannot serve that.
+CREATE INDEX IF NOT EXISTS idx_conversations_customer ON conversations(customer_number);
 
 -- Every message + status timeline (FR-11)
 CREATE TABLE IF NOT EXISTS messages (
@@ -85,6 +89,8 @@ CREATE TABLE IF NOT EXISTS webhook_jobs (
   finished_at      INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_jobs_pending ON webhook_jobs(state, conversation_id, id);
+-- The admin log reads a message's webhooks by wamid (500 messages x ~3 jobs).
+CREATE INDEX IF NOT EXISTS idx_jobs_wamid ON webhook_jobs(wamid, id);
 
 -- Every attempt + outcome (Person 1 writes, admin log reads)
 CREATE TABLE IF NOT EXISTS webhook_attempts (
@@ -96,6 +102,7 @@ CREATE TABLE IF NOT EXISTS webhook_attempts (
   duration_ms  INTEGER,
   at           INTEGER NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_attempts_job ON webhook_attempts(job_id, attempt);
 
 -- Meta requests the emulator rejected (errors + X-Mock-Force-Error), shown in the
 -- admin log as direction 'rejected' (plan §8c, §10c). Person 1 writes.

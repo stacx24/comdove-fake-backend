@@ -2,6 +2,8 @@
 // Person 2 owns the Control API + health below. Person 1 (Meta emulator) and
 // Person 3 (WebSocket) add their paths as they build.
 
+import { MAX_GROUP_SIZE } from '../contract/api-types.js';
+
 const jsonBody = (schema: unknown) => ({ required: true, content: { 'application/json': { schema } } });
 const ok = (example: unknown) => ({ '200': { description: 'OK', content: { 'application/json': { example } } } });
 
@@ -52,7 +54,7 @@ export const openapiSpec = {
     '/api/groups': {
       post: {
         tags: ['Groups'], summary: 'Create a client group (FR-15)',
-        requestBody: jsonBody({ type: 'object', required: ['name', 'numbers'], properties: { name: { type: 'string', example: 'alpha' }, numbers: { type: 'array', maxItems: 10, items: { type: 'string' }, example: ['919876543210', '919876543211'] } } }),
+        requestBody: jsonBody({ type: 'object', required: ['name', 'numbers'], properties: { name: { type: 'string', example: 'alpha' }, numbers: { type: 'array', maxItems: MAX_GROUP_SIZE, items: { type: 'string' }, example: ['919876543210', '919876543211'] } } }),
         responses: ok({ id: 'alpha', name: 'alpha', numbers: ['919876543210', '919876543211'] }),
       },
       get: { tags: ['Groups'], summary: 'List groups (free/locked)', responses: ok([{ id: 'alpha', name: 'alpha', count: 2, status: 'free', locked_since: null }]) },

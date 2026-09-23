@@ -22,7 +22,11 @@ import { fail } from './api/respond.js';
 import { openapiSpec } from './docs/openapi.js';
 
 export interface ComposeOptions {
-  env?: Pick<Env, 'COMDOVE_WEBHOOK_URL' | 'APP_SECRET' | 'WEBHOOK_VERIFY_TOKEN' | 'STATUS_WEBHOOK_DELAY_MS'>;
+  env?: Pick<
+    Env,
+    'COMDOVE_WEBHOOK_URL' | 'APP_SECRET' | 'WEBHOOK_VERIFY_TOKEN' | 'STATUS_WEBHOOK_DELAY_MS'
+  > &
+    Partial<Pick<Env, 'WEBHOOK_MAX_PARALLEL'>>;
   bus?: Bus;
   log?: (line: string) => void;
   /** Test knobs (retry delays, timeout). */
@@ -68,7 +72,7 @@ export function composeServer(o: ComposeOptions = {}) {
     appSecret: cfg.APP_SECRET,
     verifyToken: cfg.WEBHOOK_VERIFY_TOKEN,
     statusDelayMs: cfg.STATUS_WEBHOOK_DELAY_MS,
-    dispatcher: o.dispatcher,
+    dispatcher: { maxParallel: cfg.WEBHOOK_MAX_PARALLEL, ...o.dispatcher },
   });
   lifecycleRef = metaFace.lifecycle;
 

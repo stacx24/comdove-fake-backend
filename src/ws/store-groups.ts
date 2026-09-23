@@ -1,6 +1,6 @@
 // GroupDirectory on Person 2's SQLite store: what /ws needs to claim a group and render
 // its grid from the snapshot alone (contract Snapshot, plan §11c).
-import type { Snapshot, Tile } from '../contract/ws-events.js';
+import { SNAPSHOT_HISTORY_PER_TILE, type Snapshot, type Tile } from '../contract/ws-events.js';
 import type { GroupDirectory } from './session.js';
 import { getAutoReply, listBusinessNumbers, listGroupTiles, listGroups, type Customer } from '../core/registry.js';
 import { history, queuedFor } from '../core/messages.js';
@@ -16,12 +16,16 @@ function tileOf(c: Customer): Tile {
       unread[m.from_number] = (unread[m.from_number] ?? 0) + 1;
     }
   }
+  // Only the newest slice goes in the snapshot: a 100-tile group talking to 5 businesses
+  // would otherwise send one huge frame on every claim and every reconnect (WS-343).
+  // Unread is counted above, over the whole history, so the badges stay right.
+  const recent = past.length > SNAPSHOT_HISTORY_PER_TILE ? past.slice(-SNAPSHOT_HISTORY_PER_TILE) : past;
   return {
     number: c.number,
     label: c.label,
     online: Boolean(c.online),
     auto_reply: getAutoReply(c.number) ?? { mode: 'manual', delay_ms: 0, rules: [] },
-    history: past.map(toWsMessage),
+    history: recent.map(toWsMessage),
     queued: queued.map(toWsMessage),
     unread,
   };
