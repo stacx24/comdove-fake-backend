@@ -67,6 +67,31 @@ export function validate(input: ValidateInput, reg: Lookups): ValidateResult {
   }
 
   if (body.type === undefined) return invalid('type is required');
+
+  // Accept template messages — extract a readable text so they show up in the fake UI.
+  if (body.type === 'template') {
+    if (body.to === undefined) return invalid('to is required');
+    const waId = normalizeNumber(body.to);
+    if (!waId) return invalid('to must be a phone number');
+    if (!reg.getCustomer(waId)) return fail(metaError('undeliverable'));
+
+    const tmpl = isObject(body.template) ? body.template : null;
+    const templateName = typeof tmpl?.name === 'string' ? tmpl.name : 'unknown';
+    const components = Array.isArray(tmpl?.components) ? (tmpl.components as unknown[]) : [];
+    const params: string[] = [];
+    for (const comp of components) {
+      if (isObject(comp) && Array.isArray(comp.parameters)) {
+        for (const param of comp.parameters as unknown[]) {
+          if (isObject(param) && param.type === 'text' && typeof param.text === 'string') {
+            params.push(param.text);
+          }
+        }
+      }
+    }
+    const text = params.length > 0 ? `[Template: ${templateName}] ${params.join(' ')}` : `[Template: ${templateName}]`;
+    return { kind: 'send', business, to: body.to as string, waId, text };
+  }
+
   if (body.type !== 'text') {
     return fail(metaError('not_implemented', { what: `message type "${String(body.type)}"` }));
   }
