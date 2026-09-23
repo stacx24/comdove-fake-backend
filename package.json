@@ -14,6 +14,8 @@
     "fake-comdove": "tsx tools/fake-comdove.ts",
     "tab": "tsx tools/tab.ts",
     "seed-comdove": "tsx tools/seed-comdove.ts",
+    "seed:e2e": "tsx tools/seed-e2e.ts",
+    "blast": "tsx tools/blast.ts",
     "fixtures": "tsx tools/gen-fixtures.ts"
   },
   "repository": {

@@ -18,8 +18,8 @@ export interface MetaFaceDeps {
   appSecret: string;
   verifyToken: string;
   statusDelayMs: number;
-  /** Test knobs (retry delays, timeout, clock). */
-  dispatcher?: Partial<Pick<DispatcherOptions, 'retryDelaysMs' | 'timeoutMs' | 'now'>>;
+  /** Test knobs (retry delays, timeout, clock, webhook concurrency). */
+  dispatcher?: Partial<Pick<DispatcherOptions, 'retryDelaysMs' | 'timeoutMs' | 'now' | 'maxParallel'>>;
 }
 
 export interface MetaFace {

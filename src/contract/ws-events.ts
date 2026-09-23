@@ -29,6 +29,8 @@ export type MessageStatus = 'sent' | 'delivered' | 'read';
 
 export const MAX_BODY_LENGTH = 4096;
 export const MAX_DELAY_MS = 30000;
+/** Newest messages per tile carried by group.claimed; older ones stay in the log (WS-343). */
+export const SNAPSHOT_HISTORY_PER_TILE = 50;
 export const REPLY_MODES: readonly ReplyMode[] = ['manual', 'echo', 'keyword'];
 
 // ---------------------------------------------------------------------------

@@ -22,6 +22,8 @@ export interface DispatcherOptions {
   /** Called after every attempt and every finish (→ admin log update). */
   onChange?: (job: Job) => void;
   onError?: (err: unknown) => void;
+  /** How many conversations may have a request in flight at once (WS-343). */
+  maxParallel?: number;
 }
 
 export interface EnqueueInput {
@@ -44,6 +46,8 @@ export interface Dispatcher {
 
 export const DEFAULT_RETRY_DELAYS_MS = [1000, 5000, 15000];
 export const DEFAULT_TIMEOUT_MS = 5000;
+/** 5 businesses x 100 tiles = 500 conversations; without a cap they all call Comdove at once. */
+export const DEFAULT_MAX_PARALLEL = 20;
 
 class Cancelled extends Error {}
 
@@ -77,8 +81,12 @@ export function createDispatcher(o: DispatcherOptions): Dispatcher {
   const now = o.now ?? Date.now;
   const report = (err: unknown) => (o.onError ?? ((e) => console.error('[dispatcher]', e)))(err);
 
+  const maxParallel = Math.max(1, o.maxParallel ?? DEFAULT_MAX_PARALLEL);
+
   let queues = new Map<number, Job[]>();
   let running = new Set<number>();
+  // Conversations with work waiting for a free slot, in arrival order.
+  let waiting: number[] = [];
   let cancel = new AbortController();
   let idleWaiters: Array<() => void> = [];
 
@@ -137,6 +145,12 @@ export function createDispatcher(o: DispatcherOptions): Dispatcher {
   function pump(cid: number) {
     const queue = queues.get(cid);
     if (running.has(cid) || !queue || queue.length === 0) return;
+    if (running.size >= maxParallel) {
+      // All slots busy: wait for one, keeping this conversation's own order.
+      if (!waiting.includes(cid)) waiting.push(cid);
+      return;
+    }
+    waiting = waiting.filter((id) => id !== cid);
     running.add(cid);
     const signal = cancel.signal;
     const myQueues = queues;
@@ -150,6 +164,11 @@ export function createDispatcher(o: DispatcherOptions): Dispatcher {
         if (signal.aborted) return settleIdle(); // cancelAll already replaced the queues
         myQueues.get(cid)?.shift();
         pump(cid);
+        // A slot just freed up: let the longest-waiting conversation in.
+        while (running.size < maxParallel && waiting.length > 0) {
+          const next = waiting.shift()!;
+          if (next !== cid) pump(next);
+        }
         settleIdle();
       });
   }
@@ -180,6 +199,7 @@ export function createDispatcher(o: DispatcherOptions): Dispatcher {
       cancel = new AbortController();
       queues = new Map();
       running = new Set();
+      waiting = [];
       settleIdle();
     },
 

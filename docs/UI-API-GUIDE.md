@@ -86,7 +86,7 @@ POST /api/groups
 { "name": "alpha", "numbers": ["919876543210","919876543211"], "labels": { "919876543210": "VIP" } }
 ```
 Response: `{ "id": "alpha", "name": "alpha", "numbers": ["919876543210","919876543211"] }`
-Errors: 409 if a number is already a customer elsewhere / is a business number, 400 if >10 numbers.
+Errors: 409 if a number is already a customer elsewhere / is a business number, or if the group is not 1–100 numbers (WS-343). 400 for a malformed number or a number listed twice.
 
 ### 2e. Live message log (bottom table)
 Initial load (pull), then live via WebSocket admin feed:

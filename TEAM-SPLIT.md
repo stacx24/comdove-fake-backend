@@ -290,7 +290,7 @@ The `P2` interface in "Interfaces" above, plus:
 
 **Validation:**
 - Max **10** business numbers.
-- A group has 1–10 numbers.
+- A group has 1–100 numbers (WS-343: 100 tiles per business number).
 - A number can't be a customer in two groups, or a customer and a business number → `409`.
 - Group `id` = slug of `name` (`a-z0-9-`).
 

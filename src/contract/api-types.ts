@@ -80,6 +80,9 @@ export interface RegisterBusinessNumberBody {
   waba_id?: string;
   token?: string;
 }
+/** Customer numbers a group may hold (WS-343: 100 tiles per business number). */
+export const MAX_GROUP_SIZE = 100;
+
 export interface CreateGroupBody {
   name: string;
   numbers: string[];

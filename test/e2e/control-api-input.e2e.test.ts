@@ -67,6 +67,25 @@ test('A: the 11th business number is refused with 409', async () => {
   assert.match(r.json.error.message, /at most 10/);
 });
 
+// --- A2. group size: 100 tiles per group (WS-343) -------------------------------------------
+const numbers = (count: number, from = 919000000000) =>
+  Array.from({ length: count }, (_, i) => String(from + i));
+
+test('A2: a group of 100 numbers is accepted', async () => {
+  const r = await api('POST', '/api/groups', { name: 'hundred', numbers: numbers(100) });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.numbers.length, 100);
+  const group = (await api('GET', '/api/groups')).json.find((g: { id: string }) => g.id === 'hundred');
+  assert.equal(group.count, 100);
+});
+
+test('A2: the 101st number is refused with 409', async () => {
+  const r = await api('POST', '/api/groups', { name: 'too-many', numbers: numbers(101, 919100000000) });
+  assert.equal(r.status, 409);
+  assert.match(r.json.error.message, /1–100 numbers/);
+  noDbErrors(r.json.error.message);
+});
+
 // --- B. auto-reply validation --------------------------------------------------------------
 const put = (body: unknown, n = T1) => api('PUT', `/api/customers/${n}/auto-reply`, body);
 
