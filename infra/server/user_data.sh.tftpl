@@ -1,0 +1,371 @@
+#!/bin/bash
+# First-boot setup of the fake WhatsApp server (WS-340). Rendered by Terraform
+# (templatefile): the values in the block below come from Terraform; the rest
+# of the script uses plain $VAR bash variables.
+set -euo pipefail
+exec > >(tee -a /var/log/comdove-fake-setup.log) 2>&1
+echo "=== comdove-fake setup start $(date -Is)"
+
+REGION="${region}"
+BUCKET="${bucket}"
+BUILD_KEY="${build_key}"
+PREFIX="${param_prefix}"
+DOMAIN="${domain}"
+ZONE_ID="${zone_id}"
+IDLE_MINUTES="${idle_minutes}"
+PERSIST_DATA="${persist_data}"
+
+APP_DIR=/opt/comdove-fake
+DATA_DIR=/var/lib/comdove-fake
+
+# ---- 0. swap first: 0.5 GB RAM is tight for dnf + npm ---------------------
+make_swap() {
+  [ -f /swapfile ] || dd if=/dev/zero of=/swapfile bs=1M count=1024 status=none
+  chmod 600 /swapfile && mkswap /swapfile >/dev/null && swapon /swapfile
+}
+swapon --show 2>/dev/null | grep -q /swapfile || make_swap || echo "swap: retry after packages"
+
+# The MINIMAL image lacks these (incl. the AWS CLI and the SSM agent).
+dnf install -y -q awscli-2 amazon-ssm-agent tar xz unzip sqlite iproute shadow-utils util-linux procps-ng python3
+swapon --show | grep -q /swapfile || make_swap
+grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+systemctl enable --now amazon-ssm-agent
+
+# ---- 1. Node.js 22 (official linux-arm64 build, checksum-verified) ----------
+NODE_DIST=https://nodejs.org/dist/latest-v22.x
+curl -fsSL "$NODE_DIST/SHASUMS256.txt" -o /tmp/node-sums.txt
+NODE_TGZ=$(awk '/linux-arm64\.tar\.xz$/ {print $2}' /tmp/node-sums.txt)
+curl -fsSL "$NODE_DIST/$NODE_TGZ" -o "/tmp/$NODE_TGZ"
+(cd /tmp && grep " $NODE_TGZ\$" node-sums.txt | sha256sum -c -)
+tar -xJf "/tmp/$NODE_TGZ" -C /usr/local --strip-components=1 --no-same-owner
+node --version
+
+# ---- 2. the build (uploaded by scripts/build.sh via Terraform) --------------
+id comdove >/dev/null 2>&1 || useradd --system --home-dir "$APP_DIR" --shell /sbin/nologin comdove
+mkdir -p "$APP_DIR" "$DATA_DIR"
+aws s3 cp "s3://$BUCKET/$BUILD_KEY" /tmp/build.zip --region "$REGION" --only-show-errors
+rm -rf "$APP_DIR/backend" "$APP_DIR/ui"
+unzip -q /tmp/build.zip -d "$APP_DIR"
+# --ignore-scripts: better-sqlite3 ships a prebuilt linux-arm64 driver; its
+# install script would try to compile it (no compiler on this box).
+(cd "$APP_DIR/backend" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund)
+
+# ---- 3. secrets from Parameter Store (never in the repo, never in Terraform) --
+getp() { aws ssm get-parameter --region "$REGION" --with-decryption --name "$PREFIX/$1" --query Parameter.Value --output text; }
+APP_SECRET=$(getp APP_SECRET)
+WEBHOOK_VERIFY_TOKEN=$(getp WEBHOOK_VERIFY_TOKEN)
+COMDOVE_WEBHOOK_URL=$(getp COMDOVE_WEBHOOK_URL)
+UI_USER=$(getp UI_USER)
+UI_PASSWORD=$(getp UI_PASSWORD)
+
+umask 077
+cat > "$APP_DIR/backend/.env" <<EOF
+PORT=4020
+COMDOVE_WEBHOOK_URL=$COMDOVE_WEBHOOK_URL
+APP_SECRET=$APP_SECRET
+WEBHOOK_VERIFY_TOKEN=$WEBHOOK_VERIFY_TOKEN
+DB_PATH=$DATA_DIR/mock.sqlite
+STATUS_WEBHOOK_DELAY_MS=500
+WS_HEARTBEAT_MS=15000
+EOF
+umask 022
+
+# Restore the previous session's data (numbers, groups, messages).
+if [ "$PERSIST_DATA" = "true" ]; then
+  aws s3 cp "s3://$BUCKET/runtime/mock.sqlite" "$DATA_DIR/mock.sqlite" --region "$REGION" --only-show-errors \
+    && echo "restored mock.sqlite" || echo "no previous mock.sqlite (fresh start)"
+fi
+chown -R comdove:comdove "$APP_DIR" "$DATA_DIR"
+
+cat > /etc/systemd/system/comdove-fake.service <<EOF
+[Unit]
+Description=comdove-fake-backend (fake WhatsApp / Meta Cloud API)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=comdove
+WorkingDirectory=$APP_DIR/backend
+ExecStart=/usr/local/bin/node dist/index.js
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=$DATA_DIR
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# ---- 3b. DNS: point testserver at THIS boot's public IP (new IP after each stop/start)
+mkdir -p /etc/comdove-fake
+printf 'ZONE_ID=%s\nDOMAIN=%s\n' "$ZONE_ID" "$DOMAIN" > /etc/comdove-fake/dns.env
+cat > /usr/local/bin/comdove-fake-dns <<'EOF'
+#!/bin/bash
+set -euo pipefail
+source /etc/comdove-fake/dns.env
+TOKEN=$(curl -fsS -X PUT http://169.254.169.254/latest/api/token -H 'X-aws-ec2-metadata-token-ttl-seconds: 300')
+IP=$(curl -fsS -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4)
+BATCH=$(printf '{"Changes":[{"Action":"UPSERT","ResourceRecordSet":{"Name":"%s","Type":"A","TTL":60,"ResourceRecords":[{"Value":"%s"}]}}]}' "$DOMAIN" "$IP")
+aws route53 change-resource-record-sets --hosted-zone-id "$ZONE_ID" --change-batch "$BATCH" --query ChangeInfo.Status --output text
+logger -t comdove-fake "DNS $DOMAIN -> $IP"
+EOF
+chmod 755 /usr/local/bin/comdove-fake-dns
+
+cat > /etc/systemd/system/comdove-fake-dns.service <<'EOF'
+[Unit]
+Description=Point the comdove-fake DNS name at this boot's public IP
+After=network-online.target
+Wants=network-online.target
+Before=caddy.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/comdove-fake-dns
+Restart=on-failure
+RestartSec=5
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# ---- 3c. power endpoint (/_power/*) + the /power page (ON/OFF toggle) --------
+mkdir -p /etc/comdove-fake
+echo "$IDLE_MINUTES" > /etc/comdove-fake/idle_minutes
+install -m 755 "$APP_DIR/power/comdove-fake-power.py" /usr/local/bin/comdove-fake-power
+
+cat > /etc/systemd/system/comdove-fake-power.service <<'EOF'
+[Unit]
+Description=comdove-fake power endpoint (localhost only, behind Caddy login)
+After=network-online.target
+[Service]
+ExecStart=/usr/bin/python3 /usr/local/bin/comdove-fake-power
+Restart=always
+RestartSec=3
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# ---- 4. Caddy: HTTPS + login + UI files + reverse proxy (WS-330 U4) ---------
+curl -fsSL "https://caddyserver.com/api/download?os=linux&arch=arm64" -o /usr/local/bin/caddy
+chmod 755 /usr/local/bin/caddy
+/usr/local/bin/caddy version
+id caddy >/dev/null 2>&1 || useradd --system --home-dir /var/lib/caddy --shell /sbin/nologin caddy
+mkdir -p /etc/caddy /var/lib/caddy /var/log/caddy
+
+# Reuse the certificate from earlier sessions (Let's Encrypt: max 5 per week per name).
+aws s3 sync "s3://$BUCKET/runtime/caddy/" /var/lib/caddy/ --region "$REGION" --only-show-errors || true
+chown -R caddy:caddy /var/lib/caddy /var/log/caddy
+
+# The UI login is re-read from Parameter Store on EVERY boot (secrets.sh +
+# stop/start is enough to change it).
+printf 'REGION=%s\nPREFIX=%s\n' "$REGION" "$PREFIX" > /etc/comdove-fake/login.env
+cat > /usr/local/bin/comdove-fake-login <<'EOF'
+#!/bin/bash
+set -euo pipefail
+source /etc/comdove-fake/login.env
+U=$(aws ssm get-parameter --region "$REGION" --name "$PREFIX/UI_USER" --query Parameter.Value --output text)
+P=$(aws ssm get-parameter --region "$REGION" --with-decryption --name "$PREFIX/UI_PASSWORD" --query Parameter.Value --output text)
+H=$(/usr/local/bin/caddy hash-password --plaintext "$P")
+umask 077
+printf 'UI_USER=%s\nUI_HASH=%s\n' "$U" "$H" > /etc/caddy/caddy.env.new
+chown root:caddy /etc/caddy/caddy.env.new && chmod 640 /etc/caddy/caddy.env.new
+mv -f /etc/caddy/caddy.env.new /etc/caddy/caddy.env
+EOF
+chmod 755 /usr/local/bin/comdove-fake-login
+/usr/local/bin/comdove-fake-login
+
+cat > /etc/systemd/system/comdove-fake-login.service <<'EOF'
+[Unit]
+Description=Refresh the comdove-fake UI login from Parameter Store
+After=network-online.target
+Wants=network-online.target
+Before=caddy.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/comdove-fake-login
+[Install]
+WantedBy=multi-user.target
+EOF
+
+cat > /etc/caddy/Caddyfile <<'EOF'
+{
+%{ if acme_email != "" ~}
+	email ${acme_email}
+%{ endif ~}
+	admin off
+}
+
+${domain} {
+	encode zstd gzip
+
+	# Meta Graph face — ComDove calls these with its Bearer token (no login).
+	@meta path_regexp ^/v[0-9]+\.[0-9]+/
+	handle @meta {
+		reverse_proxy 127.0.0.1:4020
+	}
+
+	handle /health {
+		reverse_proxy 127.0.0.1:4020
+	}
+
+	# Power page (ON/OFF toggle with confirmation) + its local endpoint.
+	handle /_power/* {
+		basic_auth {
+			{$UI_USER} {$UI_HASH}
+		}
+		reverse_proxy 127.0.0.1:4021
+	}
+	handle /power {
+		basic_auth {
+			{$UI_USER} {$UI_HASH}
+		}
+		root * /opt/comdove-fake/power
+		rewrite * /index.html
+		file_server
+	}
+
+	# Control API, WebSocket and API docs have NO auth of their own → login here.
+	@backend path /api/* /ws /reset /docs /docs/* /openapi.json
+	handle @backend {
+		basic_auth {
+			{$UI_USER} {$UI_HASH}
+		}
+		reverse_proxy 127.0.0.1:4020
+	}
+
+	# The built UI (comdove-fake-ui client/dist); unknown paths → the SPA.
+	handle {
+		basic_auth {
+			{$UI_USER} {$UI_HASH}
+		}
+		root * /opt/comdove-fake/ui
+		try_files {path} /index.html
+		file_server
+	}
+
+	log {
+		output file /var/log/caddy/access.log
+	}
+}
+EOF
+/usr/local/bin/caddy fmt --overwrite /etc/caddy/Caddyfile
+env $(cat /etc/caddy/caddy.env | xargs) /usr/local/bin/caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+# validate ran as root and may have created access.log as root → hand it back.
+chown -R caddy:caddy /var/log/caddy
+
+cat > /etc/systemd/system/caddy.service <<'EOF'
+[Unit]
+Description=Caddy (HTTPS + reverse proxy for comdove-fake)
+After=network-online.target comdove-fake.service
+Wants=network-online.target
+
+[Service]
+User=caddy
+Group=caddy
+EnvironmentFile=/etc/caddy/caddy.env
+Environment=XDG_DATA_HOME=/var/lib
+Environment=XDG_CONFIG_HOME=/var/lib
+ExecStart=/usr/local/bin/caddy run --environ --config /etc/caddy/Caddyfile --adapter caddyfile
+Restart=always
+RestartSec=3
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# ---- 5. backups to S3: every 10 min and at shutdown -------------------------
+cat > /usr/local/bin/comdove-fake-backup <<EOF
+#!/bin/bash
+set -u
+if [ "$PERSIST_DATA" = "true" ] && [ -f $DATA_DIR/mock.sqlite ]; then
+  sqlite3 $DATA_DIR/mock.sqlite ".backup '/tmp/mock-backup.sqlite'" \
+    && aws s3 cp /tmp/mock-backup.sqlite s3://$BUCKET/runtime/mock.sqlite --region $REGION --only-show-errors
+fi
+aws s3 sync /var/lib/caddy/ s3://$BUCKET/runtime/caddy/ --region $REGION --only-show-errors
+EOF
+chmod 755 /usr/local/bin/comdove-fake-backup
+
+cat > /etc/systemd/system/comdove-fake-backup.service <<'EOF'
+[Unit]
+Description=Back up comdove-fake data + TLS certificate to S3
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/comdove-fake-backup
+EOF
+
+cat > /etc/systemd/system/comdove-fake-backup.timer <<'EOF'
+[Unit]
+Description=Back up comdove-fake every 10 minutes
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=10min
+[Install]
+WantedBy=timers.target
+EOF
+
+# Runs its ExecStop (a final backup) while the network is still up at shutdown.
+cat > /etc/systemd/system/comdove-fake-backup-on-shutdown.service <<'EOF'
+[Unit]
+Description=Final comdove-fake backup at shutdown
+After=network-online.target comdove-fake.service caddy.service
+Wants=network-online.target
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/true
+ExecStop=/usr/local/bin/comdove-fake-backup
+TimeoutStopSec=120
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# ---- 6. idle watchdog: power off (→ terminate) when nobody uses it ---------
+cat > /usr/local/bin/comdove-fake-idle-check <<EOF
+#!/bin/bash
+IDLE_MINUTES=$IDLE_MINUTES
+[ "\$IDLE_MINUTES" -eq 0 ] && exit 0
+# Grace period after boot.
+UPTIME_MIN=\$(awk '{print int(\$1/60)}' /proc/uptime)
+[ "\$UPTIME_MIN" -lt \$((IDLE_MINUTES + 5)) ] && exit 0
+# An open browser tab (WebSocket) or an in-flight request keeps it alive.
+CONNS=\$(ss -Htn state established '( sport = :443 or sport = :80 )' | wc -l)
+[ "\$CONNS" -gt 0 ] && exit 0
+LAST=\$(stat -c %Y /var/log/caddy/access.log 2>/dev/null || echo 0)
+IDLE=\$(( (\$(date +%s) - LAST) / 60 ))
+if [ "\$IDLE" -ge "\$IDLE_MINUTES" ]; then
+  logger -t comdove-fake "idle for \$IDLE min (limit \$IDLE_MINUTES) → powering off"
+  systemctl poweroff
+fi
+EOF
+chmod 755 /usr/local/bin/comdove-fake-idle-check
+
+cat > /etc/systemd/system/comdove-fake-idle.service <<'EOF'
+[Unit]
+Description=comdove-fake idle watchdog
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/comdove-fake-idle-check
+EOF
+
+cat > /etc/systemd/system/comdove-fake-idle.timer <<'EOF'
+[Unit]
+Description=Check comdove-fake idleness every minute
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+[Install]
+WantedBy=timers.target
+EOF
+
+# ---- 7. start everything ------------------------------------------------------
+systemctl daemon-reload
+systemctl enable comdove-fake-login.service
+systemctl enable --now comdove-fake-dns.service
+systemctl enable --now comdove-fake.service
+systemctl enable --now comdove-fake-power.service
+systemctl enable --now caddy.service
+systemctl enable --now comdove-fake-backup.timer comdove-fake-backup-on-shutdown.service comdove-fake-idle.timer
+echo "=== comdove-fake setup done $(date -Is) — https://$DOMAIN"

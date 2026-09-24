@@ -1,0 +1,15 @@
+{
+  "_comment": "Copy to infra/seed.json (git-ignored) and edit. up.sh registers these after every start. phone_number_id / waba_id / token must match the WabaAccount + WabaPhoneNumber rows in the ComDove that uses this server.",
+  "business_numbers": [
+    {
+      "display_number": "14155550123",
+      "label": "ComDove demo",
+      "phone_number_id": "DEMO_PH_1789982738929",
+      "waba_id": "DEMO_WABA_1789982738913",
+      "token": "demo"
+    }
+  ],
+  "groups": [
+    { "name": "alpha", "numbers": ["919876543210", "919876543211"] }
+  ]
+}

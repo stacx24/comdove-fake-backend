@@ -1,0 +1,13 @@
+# Terraform working files + state (state can contain secrets)
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfplan
+crash.log
+
+# Local build output
+.build/
+
+# Team seed data (tokens) — copy seed.example.json
+seed.json

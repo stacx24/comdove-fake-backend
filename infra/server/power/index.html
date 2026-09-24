@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fake server power</title>
+<style>
+  :root { --bg:#0f1115; --card:#171a21; --line:#262b35; --fg:#e8eaed; --muted:#9aa3b2; --on:#34c77b; --off:#6b7280; --danger:#e5484d; --accent:#e8b04b; }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; display:grid; place-items:center; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; padding:16px; }
+  .card { width:100%; max-width:420px; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:24px; }
+  h1 { font-size:18px; margin:0 0 4px; }
+  .host { color:var(--muted); font-family:ui-monospace,Menlo,monospace; font-size:13px; }
+  .row { display:flex; align-items:center; justify-content:space-between; margin:22px 0 10px; }
+  .state { font-weight:600; display:flex; align-items:center; gap:8px; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--off); }
+  .on .dot { background:var(--on); box-shadow:0 0 0 4px rgba(52,199,123,.15); }
+  .switch { position:relative; width:56px; height:30px; border-radius:30px; border:0; background:var(--off); cursor:pointer; transition:.2s; }
+  .switch::after { content:""; position:absolute; top:3px; left:3px; width:24px; height:24px; border-radius:50%; background:#fff; transition:.2s; }
+  .switch[aria-checked="true"] { background:var(--on); }
+  .switch[aria-checked="true"]::after { left:29px; }
+  .switch:disabled { opacity:.5; cursor:default; }
+  .meta { color:var(--muted); font-size:13px; }
+  .links { margin-top:18px; display:flex; gap:10px; }
+  .links a { color:var(--accent); text-decoration:none; font-size:13px; }
+  .note { margin-top:18px; padding:12px; border-radius:10px; background:#11141a; border:1px solid var(--line); color:var(--muted); font-size:13px; }
+  code { font-family:ui-monospace,Menlo,monospace; color:var(--fg); }
+  dialog { border:1px solid var(--line); border-radius:14px; background:var(--card); color:var(--fg); padding:22px; max-width:360px; }
+  dialog::backdrop { background:rgba(0,0,0,.6); }
+  dialog h2 { font-size:16px; margin:0 0 8px; }
+  dialog p { color:var(--muted); margin:0 0 18px; font-size:14px; }
+  .actions { display:flex; gap:10px; justify-content:flex-end; }
+  button.btn { border:1px solid var(--line); background:transparent; color:var(--fg); padding:8px 14px; border-radius:8px; cursor:pointer; font:inherit; }
+  button.danger { background:var(--danger); border-color:var(--danger); color:#fff; }
+</style>
+</head>
+<body>
+<main class="card">
+  <h1>Fake WhatsApp server</h1>
+  <div class="host" id="host"></div>
+
+  <div class="row">
+    <div class="state" id="state"><span class="dot"></span><span id="stateText">Checking…</span></div>
+    <button class="switch" id="toggle" role="switch" aria-checked="false" aria-label="Server power" disabled></button>
+  </div>
+  <div class="meta" id="meta"></div>
+
+  <div class="links"><a href="/client">Phones</a><a href="/admin">Admin</a><a href="/docs">API docs</a></div>
+
+  <div class="note" id="note">
+    Turning off stops the server right away (data is kept). It also turns itself off when nobody
+    uses it. To start it again, run <code>infra/scripts/start.sh</code>, which takes about a minute.
+  </div>
+</main>
+
+<dialog id="confirm">
+  <h2>Turn off the server now?</h2>
+  <p>Everyone using it is disconnected, and messages from ComDove fail until it is started again.
+     Data is kept.</p>
+  <div class="actions">
+    <button class="btn" id="cancel">Cancel</button>
+    <button class="btn danger" id="ok">Turn off</button>
+  </div>
+</dialog>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  $("host").textContent = location.host;
+
+  function setOn(info) {
+    $("state").classList.add("on");
+    $("stateText").textContent = "On";
+    $("toggle").setAttribute("aria-checked", "true");
+    $("toggle").disabled = false;
+    const up = Math.round(info.uptime_seconds / 60);
+    const idle = info.idle_off_minutes;
+    $("meta").textContent = `Up for ${up} min` + (idle ? ` · turns itself off after ${idle} idle min` : "");
+  }
+
+  function setOff(text) {
+    $("state").classList.remove("on");
+    $("stateText").textContent = text;
+    $("toggle").setAttribute("aria-checked", "false");
+    $("toggle").disabled = true;
+    $("meta").textContent = "";
+  }
+
+  async function refresh() {
+    try {
+      const r = await fetch("/_power/status", { cache: "no-store" });
+      if (!r.ok) throw new Error(r.status);
+      setOn(await r.json());
+    } catch {
+      setOff("Off / unreachable");
+    }
+  }
+
+  $("toggle").addEventListener("click", () => $("confirm").showModal());
+  $("cancel").addEventListener("click", () => $("confirm").close());
+  $("ok").addEventListener("click", async () => {
+    $("confirm").close();
+    $("toggle").disabled = true;
+    $("stateText").textContent = "Turning off…";
+    try {
+      const r = await fetch("/_power/off", { method: "POST", headers: { "X-Confirm": "turn-off" } });
+      if (r.status !== 202) throw new Error(r.status);
+      setOff("Off");
+      $("note").innerHTML = "The server is shutting down (final data backup first). " +
+        "Start it again with <code>infra/scripts/start.sh</code>.";
+    } catch (e) {
+      $("stateText").textContent = "Could not turn off (" + e.message + ")";
+      $("toggle").disabled = false;
+    }
+  });
+
+  refresh();
+</script>
+</body>
+</html>
