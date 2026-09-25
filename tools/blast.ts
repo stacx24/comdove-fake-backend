@@ -21,6 +21,7 @@
  *
  *   npm run blast -- --template hello_world --language en
  *   npm run blast -- --vars "Nandha,10%"        # body variables {{1}},{{2}}
+ *   npm run blast -- --business 3 --number-offset 900   # 100 sends that must all fail
  *
  * ── Comdove connection ─────────────────────────────────────────────────────────
  *   COMDOVE_URL       default http://localhost:3000
@@ -61,6 +62,17 @@ const whole = (name: string, fallback: number): number => {
   return n;
 };
 
+/** Shifts the generated customer numbers out of the seeded block, so they are
+ *  unknown to the fake server and every send comes back undeliverable. Used to
+ *  make one business fail on purpose in a blast-radius run. */
+const numberOffset = (() => {
+  const raw = value('number-offset');
+  if (raw === undefined) return 0;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) fail('--number-offset needs a whole number >= 0');
+  return n;
+})();
+
 const business = whole('business', 1);
 const count = whole('count', 100);
 const rate = whole('rate', 40);
@@ -72,7 +84,7 @@ const businesses = has('all') ? [1, 2, 3, 4, 5] : [business];
 
 /** Same numbering as seed-e2e.ts: business i owns 919{i}00000001 … +100. */
 const customerNumbers = (i: number, n: number) =>
-  Array.from({ length: n }, (_, k) => String(919000000000 + i * 100000000 + k + 1));
+  Array.from({ length: n }, (_, k) => String(919000000000 + i * 100000000 + k + 1 + numberOffset));
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
